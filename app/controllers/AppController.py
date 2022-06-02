@@ -104,7 +104,7 @@ def background_job_training(data: json):
                 for key, value in dict_df.items():
                     preprocessed_data[key] = value
 
-        return
+        
         # Only for Anoanomaly detection training:
         # Part Anomaly Detection ML:
         if ml_type == 'anomaly' and category == 'training':

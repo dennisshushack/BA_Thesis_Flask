@@ -4,7 +4,6 @@ DROP TABLE IF EXISTS ML_Anomaly;
 DROP TABLE IF EXISTS DL_Anomaly;
 
 
-
 /* Table for all incoming post requests */
 CREATE TABLE post_requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
