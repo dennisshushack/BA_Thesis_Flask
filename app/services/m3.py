@@ -49,7 +49,7 @@ class m3:
         return [timestamp, pid, syscall, time_cost]
 
     @staticmethod
-    def clean_data(input_dirs: dict):
+    def clean_data(input_dirs: dict, begin:int = None, end:int = None):
         """
         This function preprocesses the data.
         Gets rid of unnecessary parts of the log files 
@@ -91,7 +91,12 @@ class m3:
                         os.remove(input_dir + "/" + inputfile)
                         skipped += 1
                         continue
-        
+            if begin is not None and end is not None:            
+                for outputfile in os.listdir(input_dir):
+                    output_filename = outputfile.split('.')[0]
+                    if int(output_filename) < begin or int(output_filename) > end:
+                        os.remove(input_dir + "/" + outputfile)
+                    
 
     @staticmethod
     def load_scaler(training_path: str, feature:str):

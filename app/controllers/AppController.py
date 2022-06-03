@@ -29,6 +29,7 @@ def identify_subdirectories(path: str, behavior: str = None):
     if behavior != None:
         subdirectories = {behavior: path + '/' + behavior}
         return subdirectories
+
     # For training:
     else:
         subdirectories = {}
@@ -62,7 +63,14 @@ def background_job_training(data: json):
         monitors = data['monitors']
         behavior = data['behavior']
         path = data['path']
-
+        begin = data['begin']
+        end = data['end']
+        monitors = monitors.split(',')
+        if begin == 'None':
+            begin = None
+        if end == 'None':
+            end = None
+        
          # Insert the data into the database table post_requests:
         dbService = dbqueries()
         dbService.insert_into_post_requests(db, device, category, ml_type, str(monitors), behavior, path)
@@ -75,7 +83,6 @@ def background_job_training(data: json):
            if dbqueries.get_training_data_location(db, device, ml_type) != None:
                training_path = path
                testing_path = None
-
            else:
                dbqueries.insert_training_data_location(db, device, ml_type, path)
                training_path = path
@@ -88,23 +95,27 @@ def background_job_training(data: json):
             subdirectories = identify_subdirectories(path)    
 
         # Start the preprocessing (for the training & testing data) Classification & Anomaly Detection:
+        print("Starting preprocessing for your {category} data...".format(category=category))
         preprocessed_data = {}
         for monitor in monitors:
             if monitor == 'm1':
-                df_m1, vector_behavior_m1, ids_m1 = m1.clean_data(subdirectories)
+                df_m1, vector_behavior_m1, ids_m1 = m1.clean_data(subdirectories, begin, end)
                 m1_preprocessed = m1.preprocess_data(df_m1, vector_behavior_m1, ids_m1, category, training_path, testing_path)
                 preprocessed_data['m1'] = m1_preprocessed
             elif monitor == 'm2':
-                df_m2, vector_behavior_m2, ids_m2 = m2.clean_data(subdirectories)
+                df_m2, vector_behavior_m2, ids_m2 = m2.clean_data(subdirectories, begin, end)
+                print(df_m2)
                 m2_preprocessed = m2.preprocess_data(df_m2, vector_behavior_m2, ids_m2, category, training_path, testing_path)
                 preprocessed_data['m2'] = m2_preprocessed
             elif monitor == "m3":
-                m3.clean_data(subdirectories)
+                m3.clean_data(subdirectories,begin,end)
                 dict_df = m3.get_features(subdirectories, category, training_path, testing_path)
                 for key, value in dict_df.items():
                     preprocessed_data[key] = value
+        print("Preprocessing finished.")
+        return
+    
 
-        
         # Only for Anoanomaly detection training:
         # Part Anomaly Detection ML:
         if ml_type == 'anomaly' and category == 'training':
@@ -161,12 +172,12 @@ def test():
     return jsonify({'message': 'Server is up'})
     
     
-@bp.route('/train', methods=['POST'])
+@bp.route('/main', methods=['POST'])
 @login_required
 def train():
     """
     This endpoint is used to preprocess the data for Machine Learning and Deep Larning models and then train
-    the models. Currently just uses the threading module. Could be improved by using a queue (i.e RabbitMQ) & Celery
+    the models. It is also used for evaluating the models.
     """
     
     # Checks, if the input body is in a JSON format:
@@ -180,7 +191,7 @@ def train():
     threading.Thread(target=background_job_training, args=(data,)).start()
 
     # Creates a thread to train the models:
-    return jsonify({"status": "ok", "message": "started training"})
+    return jsonify({"status": "ok", "message": "started"})
 
 
 

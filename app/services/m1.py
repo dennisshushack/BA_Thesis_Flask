@@ -21,7 +21,7 @@ class m1:
     :output: a dataframe with the cleaned data ready for ML&DL Classification and anomaly detection
     """
     @staticmethod
-    def clean_data(input_dirs: dict ) -> pd.DataFrame:
+    def clean_data(input_dirs: dict, begin:int = None, end: int = None ) -> pd.DataFrame:
         """
         Cleans the data for monitor 1 (one  or multiple .csv file to clean)
         :input: input_dirs: dict with the paths to the input directories where raw data (.csv) are stored with
@@ -43,9 +43,13 @@ class m1:
 
                 file_df = pd.read_csv(input_dir + "/" + file)
                 
+                if begin is not None and end is not None:
+                    file_df = file_df.loc[(file_df['time'] >= begin) & (file_df['time'] <= end)]
+                
+                file_df.drop('time', axis=1, inplace=True)
+                
                 # Drop all temporary features:
                 file_df.drop('seconds', axis=1, inplace=True)
-                file_df.drop('time', axis=1, inplace=True)
                 
                 # Drop all rows with NaN values:
                 file_df.dropna(inplace=True)
@@ -64,6 +68,7 @@ class m1:
 
                 # Append the dataframe to the dataframe df
                 df = df.append(file_df)
+                
 
         return df, vector_behavior, ids
     

@@ -64,6 +64,9 @@ class classificationml:
             # Get recall precision and f1 score:
             report = pd.DataFrame(classification_report(y_val, y_pred, output_dict=True))
             results[name].append(report)
+            # Save the result as a text file:
+            with open(ml_path + name + '.txt', 'w') as f:
+                f.write(str(results[name]))
 
             # Save the model:
             with open(ml_path + feature +  name + '.pickle', 'wb') as f:

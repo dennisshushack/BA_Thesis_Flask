@@ -19,7 +19,7 @@ class m2:
     for classificaiton or anomaly detection
     """
     @staticmethod
-    def clean_data(input_dirs: dict) -> pd.DataFrame:
+    def clean_data(input_dirs: dict, begin:int = None, end:int = None) -> pd.DataFrame:
         """
         Cleans the data for monitor 2 HPC & Ressource Usage (one  or multiple .csv files to clean)
         :input: input_dirs: dict with the paths to the input directories where raw data (.csv) are stored with
@@ -37,8 +37,11 @@ class m2:
             behavior = key
             files = os.listdir(input_dir)
             for file in files:
-
+                    
                 file_df = pd.read_csv(input_dir + "/" + file)
+
+                if begin is not None and end is not None:
+                    file_df = file_df.loc[(file_df['timestamp'] >= begin) & (file_df['timestamp'] <= end)]
 
                 # Drop all temporary features:
                 file_df.drop('seconds', axis=1, inplace=True)
@@ -65,7 +68,7 @@ class m2:
                 ids.extend([file] * len(file_df))
 
                 # Append the dataframe to the dataframe df
-                df = df.append(file_df)
+                df = df.append(file_df)       
 
         return df, vector_behavior, ids
         
