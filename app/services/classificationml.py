@@ -31,11 +31,13 @@ class classificationml:
         # List, that will be returned
         model_list = []
         y = df["behavior"]
+
+
         X = df[feature].tolist()
         X = np.array(X)
 
         # Create a train-test split:
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=.3, shuffle=False, random_state=42)
+        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=.3, shuffle=True, random_state=42)
 
         # Check if the directory exists, if not create it:
         ml_path = train_path + '/MLmodels/'
@@ -47,33 +49,32 @@ class classificationml:
         classifiers = {
             "Logistic Regression": LogisticRegression(solver='saga',multi_class='ovr', max_iter=5000),
             "SVM": SVC(gamma='auto', kernel='rbf'),
-            "Random Forest": RandomForestClassifier(n_estimators=100, ),
+            "Random Forest": RandomForestClassifier(),
             "KNN": KNeighborsClassifier()
         }
         # Train the models and save them:
         for name, clf in classifiers.items():
-            results = {name: []}
-            t1 = time.time()
             clf.fit(X_train, y_train)
-            t2 = time.time()
             y_pred = clf.predict(X_val)
-            accuracy = accuracy_score(y_val, y_pred)
-            results[name].append(accuracy)
-            results[name].append(t2-t1)
+      
+            # Get recall precision and f1 score & accuracy score:
+            # Get classification report:
+            report = classification_report(y_val, y_pred)
+            print(report)            
+            report = pd.DataFrame(classification_report(y_val, y_pred, output_dict=True)).transpose()
 
-            # Get recall precision and f1 score:
-            report = pd.DataFrame(classification_report(y_val, y_pred, output_dict=True))
-            results[name].append(report)
-            # Save the result as a text file:
-            with open(ml_path + name + '.txt', 'w') as f:
-                f.write(str(results[name]))
-
+            # Check if outputpath exists, if not create it:
+            output_path = train_path + "/Output/"
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+            
             # Save the model:
             with open(ml_path + feature +  name + '.pickle', 'wb') as f:
                 pickle.dump(clf, f)            
             
-            model_list.append(results)
+            # Save the report as a .csv file in the output folder:
+            report.to_csv(output_path + feature + name + '_report.csv')
+
         
-        return model_list
         
 

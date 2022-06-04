@@ -90,8 +90,7 @@ class anomalydl:
         :output: y_pred: the labels for the test data
         """
         # Returned dict:
-        model_dict = {}
-        behavior = df.iloc[0,1]
+        model_list = []
 
         # Create a list from the last column of the dataframe
         # And create a numpy array:
@@ -108,7 +107,6 @@ class anomalydl:
         t1 = time.time()
         reconstruction = model.predict(X)
         t2 = time.time()
-        model_dict[f"test_time_{behavior}"] = t2 - t1
         loss = mae(X, reconstruction)
 
         # Get the y_pred:
@@ -116,9 +114,10 @@ class anomalydl:
 
         # Calculate the TPR:
         accuracy = accuracy_score(y, y_pred)
-        model_dict[f"TPR_{behavior}"] = accuracy
+        model_list.append(accuracy)
+        model_list.append(t2-t1)
 
-        return model_dict
+        return model_list
 
 
     @staticmethod

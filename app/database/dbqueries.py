@@ -75,25 +75,26 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO ML_Anomaly (device, feature, model, TNR, train_time)
+            INSERT INTO ML_Training_Anomaly (device, feature, model, TNR, train_time)
             VALUES (?, ?, ?, ?, ?)
         """, (device, feature, model, TNR, train_time))
         db_connection.commit()
         cursor.close()
-    
+  
     @staticmethod
-    def update_ml_anomaly(db_connection, output_dict, feature, model, device):
+    def create_ml_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, test_time):
         """
-        output_dict: dictionary 
-        feature: feature that is being used, model: model that is being used
-        Updates the columns == key in the output_dict in the ml_dl_anomaly table, where 
-        device = device and feature = feature and model = model.
+        Creates a new entry in the ml_dl_anomaly_testing table.
+        :input: db_connection: database
+        connection, device: device that made the request, experiment: experiment that is being used,
+        ransomware: ransomware that is being used, feature: feature that is being used, model: model that is being used,
+        TPR: TPR of the model, test_time: time it took to test the model
         """
         cursor = db_connection.cursor()
-        for key,value in output_dict.items():
-            cursor.execute("""
-                UPDATE ML_Anomaly SET {} = ? WHERE device = ? AND feature = ? AND model = ?
-            """.format(key), (value, device, feature, model))
+        cursor.execute("""
+            INSERT INTO ML_Testing_Anomaly (device, experiment, ransomware, feature, model, TPR, test_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (device, experiment, ransomware, feature, model, TPR, test_time))
         db_connection.commit()
         cursor.close()
 
@@ -109,7 +110,7 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO DL_Anomaly (device, feature, model, threshhold, neurons, TNR, train_time)
+            INSERT INTO DL_Training_Anomaly (device, feature, model, threshhold, neurons, TNR, train_time)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (device, feature, model, threshold, neurons, TNR, train_time))
         db_connection.commit()
@@ -125,7 +126,7 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            SELECT threshhold FROM DL_Anomaly
+            SELECT threshhold FROM DL_Training_Anomaly
             WHERE device = ? AND feature = ?
         """, (device, feature))
         threshold = cursor.fetchone()
@@ -135,19 +136,21 @@ class dbqueries:
         return threshold[0]
         
     @staticmethod
-    def update_dl_anomaly(db_connection, output_dict, feature, model, device):
+    def create_dl_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, test_time):
         """
-        output_dict: dictionary 
-        feature: feature that is being used, model: model that is being used
-        Updates the columns == key in the output_dict in the dl_anomaly table, where 
-        device = device and feature = feature and model = model.
+        Creates a new entry in the dl_anomaly_testing table.
+        :input: db_connection: database
+        connection, device: device that made the request, experiment: experiment that is being used,
+        ransomware: ransomware that is being used, feature: feature that is being used, model: model that is being used,
+        TPR: TPR of the model, test_time: time it took to test the model, threshold: threshold of the model, neurons: neurons of the model
         """
         cursor = db_connection.cursor()
-        for key,value in output_dict.items():
-            cursor.execute("""
-                UPDATE DL_Anomaly SET {} = ? WHERE device = ? AND feature = ? AND model = ?
-            """.format(key), (value, device, feature, model))
+        cursor.execute("""
+            INSERT INTO DL_Testing_Anomaly (device, experiment, ransomware, feature, model, TPR, test_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (device, experiment, ransomware, feature, model, TPR, test_time))
         db_connection.commit()
         cursor.close()
         
+
         

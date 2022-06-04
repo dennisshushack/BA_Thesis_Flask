@@ -34,7 +34,7 @@ class anomalyml:
 
         ml_path = train_path + '/MLmodels/'
 
-        classifiers = ["IsolationForest", "OneClassSVM", "LocalOutlierFactor","EllipticEnvelope"]
+        classifiers = ["IsolationForest", "OneClassSVM", "LocalOutlierFactor"]
 
         # Create a list from the last column of the dataframe
         # And create a numpy array:
@@ -88,7 +88,6 @@ class anomalyml:
             'IsolationForest': IsolationForest(contamination=contamination, random_state=42),
             'OneClassSVM': OneClassSVM(cache_size=200, gamma='scale', kernel='rbf',nu=0.05,  shrinking=True, tol=0.001,verbose=False),
             'LocalOutlierFactor': LocalOutlierFactor(contamination=contamination, novelty=True),
-            'EllipticEnvelope': EllipticEnvelope(contamination=contamination, random_state=42)
         }
 
         # Create a list from the last column of the dataframe

@@ -12,6 +12,7 @@ from app.services.m2 import m2
 from app.services.m1 import m1
 from app.services.anomalyml import anomalyml
 from app.services.anomalydl import anomalydl
+from app.services.classificationml import classificationml
 
 from app.database.dbqueries import dbqueries
 
@@ -33,7 +34,7 @@ def identify_subdirectories(path: str, behavior: str = None):
     # For training:
     else:
         subdirectories = {}
-        subdirectory_names = ['normal', 'ransom1', 'ransom2','ransom3']
+        subdirectory_names = ['normal', 'poc', 'dark','raas']
         for dirs in os.walk(path):
             for subdirectory in subdirectory_names:
                 if subdirectory in dirs[1]:
@@ -41,7 +42,7 @@ def identify_subdirectories(path: str, behavior: str = None):
         return subdirectories
 
 
-def background_job_training(data: json):
+def background(data: json):
     """
     This is the main job, that happens, if the training endpoint is called.
     As it is very process heavy the user will get informed before the job starts.
@@ -65,6 +66,7 @@ def background_job_training(data: json):
         path = data['path']
         begin = data['begin']
         end = data['end']
+        experiment = data['experiment']
         monitors = monitors.split(',')
         if begin == 'None':
             begin = None
@@ -104,7 +106,6 @@ def background_job_training(data: json):
                 preprocessed_data['m1'] = m1_preprocessed
             elif monitor == 'm2':
                 df_m2, vector_behavior_m2, ids_m2 = m2.clean_data(subdirectories, begin, end)
-                print(df_m2)
                 m2_preprocessed = m2.preprocess_data(df_m2, vector_behavior_m2, ids_m2, category, training_path, testing_path)
                 preprocessed_data['m2'] = m2_preprocessed
             elif monitor == "m3":
@@ -113,12 +114,12 @@ def background_job_training(data: json):
                 for key, value in dict_df.items():
                     preprocessed_data[key] = value
         print("Preprocessing finished.")
-        return
     
 
         # Only for Anoanomaly detection training:
         # Part Anomaly Detection ML:
         if ml_type == 'anomaly' and category == 'training':
+            print("Starting anomaly detection ML training...")
             for feature, dataframe in preprocessed_data.items():
                 list_anomaly_training = anomalyml.train(dataframe, training_path, feature)
                 for item in list_anomaly_training:
@@ -127,8 +128,10 @@ def background_job_training(data: json):
                         TNR = value[0]
                         train_time = value[1]
                         dbqueries.create_ml_anomaly(db, device, feature, model, TNR, train_time)
+            print("Anomaly detection ML training finished.")
 
             # Part Anomaly Detection DL:
+            print("Starting anomaly detection DL training...")
             for feature, dataframe in preprocessed_data.items():
                 dict_dl_anomaly = anomalydl.train(dataframe, training_path, feature)
                 TNR = dict_dl_anomaly['TNR']
@@ -136,28 +139,39 @@ def background_job_training(data: json):
                 threshhold = dict_dl_anomaly['threshhold']
                 neurons = str(dict_dl_anomaly['hidden_layers'])
                 dbqueries.create_dl_anomaly(db, device, feature, "autoencoder", TNR, train_time, threshhold, neurons)
-            
+            print("Anomaly detection DL training finished.")
+            print("Done with anomaly detection training.")
             return
         
         # Only for Anomaly  Detecttion testing:
         # Part Anomaly Detection ML:
         if ml_type == "anomaly" and category == "testing":
+            print("Starting anomaly detection ML testing...")
             for feature, dataframe in preprocessed_data.items():
                 list_anomaly_testing = anomalyml.validate(dataframe, training_path, feature)
                 for item in list_anomaly_testing:
                     for key, value in item.items():
                         model = key
-                        output_dict = {f'TPR_{behavior}': value[0], f'test_time_{behavior}': value[1]} 
-                        dbqueries.update_ml_anomaly(db, output_dict, feature, model, device)
+                        dbqueries.create_ml_anomaly_testing(db, device, experiment, behavior,feature, model, value[0], value[1])
+            print("Anomaly detection ML testing finished.")
             
             # Part Anomaly Detection DL:
+            print("Starting anomaly detection DL testing...")
             for feature, dataframe in preprocessed_data.items():
-                dict_dl_anomaly = anomalydl.validate(dataframe, training_path, feature)
-                dbqueries.update_dl_anomaly(db, dict_dl_anomaly, feature,"autoencoder", device)
-            
+                threshhold = dbqueries.get_threshold(db, device, feature)
+                threshhold = float(threshhold)
+                model_list = anomalydl.validate(dataframe, training_path, feature, threshhold)
+                dbqueries.create_dl_anomaly_testing(db, device, experiment, behavior, feature, "autoencoder", model_list[0], model_list[1])
+            print("Anomaly detection DL testing finished.")
+            print("Done with anomaly detection testing.")
             return
 
         # Only for Classification training:
+        if ml_type == 'classification' and category == 'training':
+            for feature, dataframe in preprocessed_data.items():
+                print("Starting classification ML training...")
+                classificationml.train(dataframe, training_path, feature)                
+                print("Classification ML training finished.")
                 
 
     
@@ -188,7 +202,7 @@ def train():
     data = request.get_json()
 
     # Start the background job:
-    threading.Thread(target=background_job_training, args=(data,)).start()
+    threading.Thread(target=background, args=(data,)).start()
 
     # Creates a thread to train the models:
     return jsonify({"status": "ok", "message": "started"})

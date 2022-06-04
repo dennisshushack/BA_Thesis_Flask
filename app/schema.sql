@@ -1,8 +1,9 @@
 DROP TABLE IF EXISTS post_requests;
 DROP TABLE IF EXISTS training_data_location;
-DROP TABLE IF EXISTS ML_Anomaly;
-DROP TABLE IF EXISTS DL_Anomaly;
-
+DROP TABLE IF EXISTS ML_Training_Anomaly;
+DROP TABLE IF EXISTS ML_Testing_Anomaly;
+DROP TABLE IF EXISTS DL_Training_Anomaly;
+DROP TABLE IF EXISTS DL_Testing_Anomaly;
 
 /* Table for all incoming post requests */
 CREATE TABLE post_requests (
@@ -25,23 +26,30 @@ CREATE TABLE training_data_location(
 );
 
 /* A table for ML Anomaly Detection*/
-CREATE TABLE ML_Anomaly(
+CREATE TABLE ML_Training_Anomaly(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   device TEXT NOT NULL,
   feature TEXT NOT NULL,
   model TEXT NOT NULL,
   TNR FLOAT NOT NULL,
-  train_time FLOAT NOT NULL,
-  TPR_ransom1 FLOAT DEFAULT NULL,
-  test_time_ransom1 FLOAT DEFAULT NULL,
-  TPR_ransom2 FLOAT DEFAULT NULL,
-  test_time_ransom2 FLOAT DEFAULT NULL,
-  TPR_ransom3 FLOAT DEFAULT NULL,
-  test_time_ransom3 FLOAT DEFAULT NULL
+  train_time FLOAT NOT NULL
 );
 
+/* This table is for training */
+CREATE TABLE ML_Testing_Anomaly(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  device TEXT NOT NULL,
+  experiment TEXT NOT NULL,
+  ransomware TEXT NOT NULL,
+  feature TEXT NOT NULL,
+  model TEXT NOT NULL,
+  TPR FLOAT NOT NULL,
+  test_time FLOAT NOT NULL
+  );
+
+
 /* A table for Anomaly Detection Deep Learning*/
-CREATE TABLE DL_Anomaly(
+CREATE TABLE DL_Training_Anomaly(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   device TEXT NOT NULL,
   feature TEXT NOT NULL,
@@ -49,13 +57,18 @@ CREATE TABLE DL_Anomaly(
   threshhold FLOAT NOT NULL,
   neurons TEXT NOT NULL,
   TNR FLOAT NOT NULL,
-  train_time FLOAT NOT NULL,
-  TPR_ransom1 FLOAT DEFAULT NULL,
-  test_time_ransom1 FLOAT DEFAULT NULL,
-  TPR_ransom2 FLOAT DEFAULT NULL,
-  test_time_ransom2 FLOAT DEFAULT NULL,
-  TPR_ransom3 FLOAT DEFAULT NULL,
-  test_time_ransom3 FLOAT DEFAULT NULL
+  train_time FLOAT NOT NULL
 );
 
+/* Table for testing */
+CREATE TABLE DL_Testing_Anomaly(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  device TEXT NOT NULL,
+  experiment TEXT NOT NULL,
+  ransomware TEXT NOT NULL,
+  feature TEXT NOT NULL,
+  model TEXT NOT NULL,
+  TPR FLOAT NOT NULL,
+  test_time FLOAT NOT NULL
+  );
 
