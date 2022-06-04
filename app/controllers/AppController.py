@@ -73,6 +73,9 @@ def background(data: json):
         if end == 'None':
             end = None
         
+        if category == "testing":
+            path = path + '/' + experiment
+        
          # Insert the data into the database table post_requests:
         dbService = dbqueries()
         dbService.insert_into_post_requests(db, device, category, ml_type, str(monitors), behavior, path)

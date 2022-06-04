@@ -34,7 +34,7 @@ class anomalyml:
 
         ml_path = train_path + '/MLmodels/'
 
-        classifiers = ["IsolationForest", "OneClassSVM", "LocalOutlierFactor"]
+        classifiers = ["IsolationForest", "OneClassSVM", "LocalOutlierFactor", "RobustCovariance"]
 
         # Create a list from the last column of the dataframe
         # And create a numpy array:
@@ -54,6 +54,8 @@ class anomalyml:
             
             t1 = time.time()
             y_pred = model.predict(X)
+            print(classifier)
+            print(y_pred)
             t2 = time.time()
             test_time = t2 - t1
             val_score = accuracy_score(y,y_pred)
@@ -85,9 +87,10 @@ class anomalyml:
 
         # Used classifiers:
         classifiers = {
-            'IsolationForest': IsolationForest(contamination=contamination, random_state=42),
+            'IsolationForest': IsolationForest(contamination=contamination),
             'OneClassSVM': OneClassSVM(cache_size=200, gamma='scale', kernel='rbf',nu=0.05,  shrinking=True, tol=0.001,verbose=False),
             'LocalOutlierFactor': LocalOutlierFactor(contamination=contamination, novelty=True),
+            "RobustCovariance": EllipticEnvelope(contamination=contamination , support_fraction=0.5)
         }
 
         # Create a list from the last column of the dataframe
@@ -99,7 +102,7 @@ class anomalyml:
         y = [1 for i in range(0,len(X))]
 
         # Create a train-test split:
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=False, random_state=42)
+        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=True, random_state=42)
 
         # Train the models and save them:
         for name, clf in classifiers.items():

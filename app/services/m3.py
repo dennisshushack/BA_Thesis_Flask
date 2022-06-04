@@ -126,7 +126,7 @@ class m3:
             os.makedirs(scaler_path)
         
         features_to_scale = df[feature].tolist()
-        X_train, X_val = train_test_split(features_to_scale, test_size=.3, shuffle=False, random_state=42)
+        X_train, X_val = train_test_split(features_to_scale, test_size=.3, shuffle=True, random_state=42)
 
         # Only fit the scaler on the training data:
         scaler = StandardScaler().fit(X_train)

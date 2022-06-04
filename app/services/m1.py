@@ -88,7 +88,7 @@ class m1:
         scaler = StandardScaler()
 
         # Create a train-test split:
-        X_train, X_val = train_test_split(df, test_size=.3, shuffle=False, random_state=42)         
+        X_train, X_val = train_test_split(df, test_size=.3, shuffle=True, random_state=42)         
         
         # Only fit to the training data:
         scaler.fit(X_train)

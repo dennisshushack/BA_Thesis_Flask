@@ -145,7 +145,7 @@ class anomalydl:
         y = [1 for i in range(0,len(X))]
 
         # Create a train-test split:
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=False, random_state=42)
+        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=True, random_state=42)
         
 
         # Get the diffent variables needed to define the Autoencoder:
