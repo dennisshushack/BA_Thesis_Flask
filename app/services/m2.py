@@ -31,6 +31,7 @@ class m2:
         df = pd.DataFrame()
         vector_behavior = []
         ids = []
+        timestamps = []
         # Iterate over the dictionary input_dirs
         for key, value in input_dirs.items():
             input_dir = value + "/m2"
@@ -46,7 +47,7 @@ class m2:
                 # Drop all temporary features:
                 file_df.drop('seconds', axis=1, inplace=True)
                 file_df.drop('time', axis=1, inplace=True)
-                file_df.drop('timestamp', axis=1, inplace=True)
+                timestamps.extend(file_df['timestamp'])
                 
                 # Keep only values with connectivity == 1 & remove connectivity
                 file_df = file_df.loc[file_df['connectivity'] == 1]
@@ -68,9 +69,16 @@ class m2:
                 ids.extend([file] * len(file_df))
 
                 # Append the dataframe to the dataframe df
-                df = df.append(file_df)       
+                df = df.append(file_df) 
 
-        return df, vector_behavior, ids
+        # Sort the dataframe by alphabetical order:
+        df = df.reindex(sorted(df.columns), axis=1)
+
+        # Sort by timestamp:
+        df.sort_values(by=['timestamp'], inplace=True)
+        df.drop('timestamp', axis=1, inplace=True)
+
+        return df, vector_behavior, ids, timestamps
         
     @staticmethod
     def create_scaler(df:pd.DataFrame, training_dir: str):
@@ -122,7 +130,7 @@ class m2:
         
 
     @staticmethod
-    def preprocess_data(df: pd.DataFrame, behaviors: list, ids: list , category: str, training_dir: str, testing_dir: str = None):
+    def preprocess_data(df: pd.DataFrame, behaviors: list, ids: list , category: str, training_dir: str, timestamps: list, testing_dir: str = None):
         """
         This function standardizes all the data in the dataframe.
         If the scaler already exists, it loads it from the input directory else it creates a new scaler and saves it.
@@ -143,12 +151,13 @@ class m2:
         features = []
         
         features.append(ids)
+        features.append(timestamps)
         features.append(behaviors)
         features.append(m2_standardized)
 
         # Create a dataframe with the ids and the behavior and join it with the normalized dataframe:
         m2_preprocessed = pd.DataFrame(features).transpose()
-        m2_preprocessed.columns = ["id", "behavior", "m2"]
+        m2_preprocessed.columns = ["id", "timestamps", "behavior", "m2"]
 
            # Create directory features if it does not exist:
         if category == "training":

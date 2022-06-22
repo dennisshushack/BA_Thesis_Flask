@@ -25,7 +25,7 @@ CREATE TABLE training_data_location(
   location_path TEXT NOT NULL
 );
 
-/* A table for ML Anomaly Detection*/
+/* Table for training AD */
 CREATE TABLE ML_Training_Anomaly(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   device TEXT NOT NULL,
@@ -35,20 +35,22 @@ CREATE TABLE ML_Training_Anomaly(
   train_time FLOAT NOT NULL
 );
 
-/* This table is for training */
+/* Table for testing AD */
 CREATE TABLE ML_Testing_Anomaly(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trainings_id INTEGER NOT NULL,
   device TEXT NOT NULL,
   experiment TEXT NOT NULL,
   ransomware TEXT NOT NULL,
   feature TEXT NOT NULL,
   model TEXT NOT NULL,
   TPR FLOAT NOT NULL,
-  test_time FLOAT NOT NULL
+  test_time FLOAT NOT NULL,
+  FOREIGN KEY(trainings_id) REFERENCES ML_Training_Anomaly(id)
   );
 
 
-/* A table for Anomaly Detection Deep Learning*/
+/* table for training DL AD*/
 CREATE TABLE DL_Training_Anomaly(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   device TEXT NOT NULL,
@@ -60,15 +62,17 @@ CREATE TABLE DL_Training_Anomaly(
   train_time FLOAT NOT NULL
 );
 
-/* Table for testing */
+/* Table for testing DL AD */
 CREATE TABLE DL_Testing_Anomaly(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trainings_id INTEGER NOT NULL,
   device TEXT NOT NULL,
   experiment TEXT NOT NULL,
   ransomware TEXT NOT NULL,
   feature TEXT NOT NULL,
   model TEXT NOT NULL,
   TPR FLOAT NOT NULL,
-  test_time FLOAT NOT NULL
+  test_time FLOAT NOT NULL,
+  FOREIGN KEY(trainings_id) REFERENCES DL_Training_Anomaly(id)
   );
 

@@ -23,30 +23,33 @@ class m3:
     for classificaiton or anomaly detection
     """
     @staticmethod
-    def extract_line(line: str) -> list:
+    def extract_line(line: str, real_timestamp) -> list:
         """
         This function cleans the data and gets rid of the summary in the end of a log file.
         :input: line: a line from the log file
         :output: a list with the necessary information
         """
-        if "Summary of events:" in line:
-            return "summary"
-        l = re.split(r' |\( |\)', line)
-        l = list(filter(lambda a: a != '', l))
-        if len(l) < 6:
-            return None
-        timestamp = l[0]
-        time_cost = l[1]
-        pid = l[4]
-        if l[5] == '...':
-            if timestamp == '0.000':
+        try:
+            if "Summary of events:" in line:
+                return "summary"
+            l = re.split(r' |\( |\)', line)
+            l = list(filter(lambda a: a != '', l))
+            if len(l) < 6:
                 return None
+            timestamp = l[0]
+            time_cost = l[1]
+            pid = l[4]
+            if l[5] == '...':
+                if timestamp == '0.000':
+                    return None
+                else:
+                    syscall = l[7].split('(')[0]
             else:
-                syscall = l[7].split('(')[0]
-        else:
-            syscall = l[5].split('(')[0]
+                syscall = l[5].split('(')[0]
 
-        return [timestamp, pid, syscall, time_cost]
+            return [real_timestamp, pid, syscall, time_cost]
+        except:
+            return None
 
     @staticmethod
     def clean_data(input_dirs: dict, begin:int = None, end:int = None):
@@ -68,11 +71,12 @@ class m3:
                     # Read the file & create an output file:
                     try:
                         with open(input_dir + "/" + inputfile, 'r') as inp, open(input_dir + "/" + outputfile, 'w') as outp:
+                            real_timestamp = inputfile.split('.')[0]
                             columnNames = ['timestamp', 'pid', 'syscall', 'time_cost']
                             outp.write(','.join(columnNames) + '\n')
                             for line in inp:
                                 try:
-                                    res = m3.extract_line(line)
+                                    res = m3.extract_line(line,real_timestamp)
                                 except:
                                     res = None
                                 if res is not None and res != 'summary':
@@ -275,7 +279,7 @@ class m3:
             vectorizers[f'countvectorizer_ngram_1-{n}'] = CountVectorizer(ngram_range=(1, n)).fit(corpus)
             n_gram_dict = vectorizers[f'countvectorizer_ngram_1-{n}'].vocabulary_
             vectorizers[f'tfidfvectorizer_ngram_1-{n}'] = TfidfVectorizer(ngram_range=(1, n)).fit(corpus)
-            vectorizers[f'hashingvectorizer_ngram_1-{n}'] = HashingVectorizer(ngram_range=(1, n), n_features=2**7).fit(corpus)
+            vectorizers[f'hashingvectorizer_ngram_1-{n}'] = HashingVectorizer(ngram_range=(1, n), n_features=2**10).fit(corpus)
         
         # Saves every vectorizer in a pickle file:
         for name in vectorizers:
@@ -333,21 +337,24 @@ class m3:
         features = []
         file_ids, behaviors = [], []
         corpus = []
-    
+        print("Extracting features...")
         # Get's all files:
         for key, value in input_dirs.items():
             input_dir = value + "/m3"
             behavior = key
             files = os.listdir(input_dir)
+            # Sort files by name:
+            files.sort(key=lambda x: x.split('.')[0])
             file_ids_sub, behaviors_sub = [], []
 
             # Iterate over the files:
             for file in files:
                 if '.csv' in file:
-                    file_ids_sub.append(str(file.replace('.csv', '')))
+                    file_ids_sub.append(int(file.replace('.csv', '')))
                     behaviors_sub.append(behavior)
             
             # Get the corpus from the files in the input_dir:
+            print("Creating corpus...")
             corpus_subdirectory = m3.get_corpus(input_dir, files)
             
             # Extend the corpus:
@@ -364,6 +371,7 @@ class m3:
 
         if category == 'training':
             # Create the different vectorizers:
+            print("Creating vectorizers...")
             m3.create_vectorizer(corpus, train_path)
             # Apply the vectorizers to the corpus:
             df = m3.apply_vectorizer(features, corpus, train_path)

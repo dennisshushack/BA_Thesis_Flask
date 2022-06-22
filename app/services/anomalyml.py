@@ -6,11 +6,11 @@ import warnings
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.covariance import EllipticEnvelope
-from sklearn.ensemble import IsolationForest
-from sklearn.svm import OneClassSVM
-from sklearn.neighbors import LocalOutlierFactor
 from sklearn.metrics import accuracy_score
+from pyod.models.iforest import IForest
+from pyod.models.ocsvm import OCSVM
+from pyod.models.lof import LOF
+
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
@@ -26,7 +26,7 @@ class anomalyml:
         """
         This function validates the data.
         :input: df: dataframe, train_path: path to train data, feature: feature to validate
-        :output: df: dataframe
+        :output: list with metrics
         """
         # List, that will be returned 
         model_list = []
@@ -34,7 +34,7 @@ class anomalyml:
 
         ml_path = train_path + '/MLmodels/'
 
-        classifiers = ["IsolationForest", "OneClassSVM", "LocalOutlierFactor", "RobustCovariance"]
+        classifiers = ["IsolationForest", "OneClassSVM", "LocalOutlierFactor"]
 
         # Create a list from the last column of the dataframe
         # And create a numpy array:
@@ -42,7 +42,7 @@ class anomalyml:
         X = np.array(X)
 
         # Labels y for later use to calculate TPR:
-        y = [-1 for i in range(0,len(X))]
+        y = [1 for i in range(0,len(X))]
 
         # Train Loop:
         for classifier in classifiers:
@@ -54,8 +54,6 @@ class anomalyml:
             
             t1 = time.time()
             y_pred = model.predict(X)
-            print(classifier)
-            print(y_pred)
             t2 = time.time()
             test_time = t2 - t1
             val_score = accuracy_score(y,y_pred)
@@ -75,6 +73,7 @@ class anomalyml:
         :output: a dictionary with the trained models
         """
         # List, that will be returned 
+        # Contains dictonnairies {name of the model: [accuracy, time]}
         model_list = []
 
         # Check if the directory exists, if not create it:
@@ -87,19 +86,18 @@ class anomalyml:
 
         # Used classifiers:
         classifiers = {
-            'IsolationForest': IsolationForest(contamination=contamination),
-            'OneClassSVM': OneClassSVM(cache_size=200, gamma='scale', kernel='rbf',nu=0.05,  shrinking=True, tol=0.001,verbose=False),
-            'LocalOutlierFactor': LocalOutlierFactor(contamination=contamination, novelty=True),
-            "RobustCovariance": EllipticEnvelope(contamination=contamination , support_fraction=0.5)
+            'IsolationForest': IForest(random_state=42, contamination=contamination),
+            'OneClassSVM':  OCSVM(kernel='rbf',gamma=0.0001, nu=0.3, contamination=contamination),
+            'LocalOutlierFactor': LOF(n_neighbors=50, contamination=contamination)
         }
-
+        
         # Create a list from the last column of the dataframe
         # And create a numpy array:
         X = df[feature].tolist()
         X = np.array(X)
 
         # Labels y for later use to calculate FPR:
-        y = [1 for i in range(0,len(X))]
+        y = [0 for i in range(0,len(X))]
 
         # Create a train-test split:
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=True, random_state=42)

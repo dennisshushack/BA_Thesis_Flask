@@ -1,10 +1,13 @@
 import os
 from flask import Flask
 
+
 # Flask Factory:
 def create_app(test_config=None):
     # create and configure the app
-    app = Flask(__name__, instance_relative_config=True)
+    app = Flask(__name__, instance_relative_config=True, static_folder='static',
+            template_folder='templates')
+
     app.config.from_mapping(
     SECRET_KEY='dev',
     DATABASE=os.path.join(app.instance_path, 'ml-flask.sqlite'),
@@ -24,8 +27,9 @@ def create_app(test_config=None):
 
     # Important imports:
     from . import db
-    from app.controllers import AppController
+    from app.controllers import AppController, FrontendController
     app.register_blueprint(AppController.bp)
+    app.register_blueprint(FrontendController.bp)
     db.init_app(app)
     
     return app

@@ -33,6 +33,7 @@ class m1:
         # Numpy array to store the behavior
         vector_behavior = []
         ids = []
+        timestamps = []
         # Iterate over the dictionary input_dirs
         for key, value in input_dirs.items():
             input_dir = value + "/m1"
@@ -46,7 +47,9 @@ class m1:
                 if begin is not None and end is not None:
                     file_df = file_df.loc[(file_df['time'] >= begin) & (file_df['time'] <= end)]
                 
+                timestamps.extend(file_df['time'])
                 file_df.drop('time', axis=1, inplace=True)
+
                 
                 # Drop all temporary features:
                 file_df.drop('seconds', axis=1, inplace=True)
@@ -69,8 +72,10 @@ class m1:
                 # Append the dataframe to the dataframe df
                 df = df.append(file_df)
                 
-
-        return df, vector_behavior, ids
+        # Sort columns of df by alphabetical order:
+        df = df.reindex(sorted(df.columns), axis=1)
+     
+        return df, vector_behavior, ids, timestamps
     
     @staticmethod
     def create_scaler(df:pd.DataFrame, training_dir: str):
@@ -122,7 +127,7 @@ class m1:
 
 
     @staticmethod
-    def preprocess_data(df: pd.DataFrame, behaviors: list, ids: list , category: str, training_dir: str, testing_dir: str = None) -> pd.DataFrame:
+    def preprocess_data(df: pd.DataFrame, behaviors: list, ids: list , category: str, training_dir: str, timestamps: list, testing_dir: str = None) -> pd.DataFrame:
         """
         This function standardizes all the data in the dataframe.
         If the scaler already exists, it loads it from the input directory else it creates a new scaler and saves it.
@@ -143,12 +148,13 @@ class m1:
         features = []
         
         features.append(ids)
+        features.append(timestamps)
         features.append(behaviors)
         features.append(m1_standardized)
 
         # Create a dataframe with the ids and the behavior and join it with the normalized dataframe:
         m1_preprocessed = pd.DataFrame(features).transpose()
-        m1_preprocessed.columns = ["id", "behavior", "m1"]
+        m1_preprocessed.columns = ["id", "timestamps", "behavior", "m1"]
         
         # Create directory features if it does not exist:
         if category == "training":

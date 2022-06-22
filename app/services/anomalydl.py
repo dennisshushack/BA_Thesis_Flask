@@ -6,6 +6,10 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+
+# Used to ignore annoying tensorflow warnings:
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
+
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.callbacks import EarlyStopping
@@ -108,7 +112,6 @@ class anomalydl:
         reconstruction = model.predict(X)
         t2 = time.time()
         loss = mae(X, reconstruction)
-
         # Get the y_pred:
         y_pred = anomalydl.append_labels(loss, threshold)
 

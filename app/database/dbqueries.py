@@ -80,9 +80,28 @@ class dbqueries:
         """, (device, feature, model, TNR, train_time))
         db_connection.commit()
         cursor.close()
+
+    @staticmethod
+    def get_foreign_key_ml(db_connection, device, feature, model):
+        """
+        Gets the id from the ML_Training_Anomaly table.
+        :input: db_connection: database connection, device: device that made the request, feature: 
+        feature that is being used, model: model that is being used
+        :return: the id of the entry
+        """
+        cursor = db_connection.cursor()
+        cursor.execute("""
+            SELECT id FROM ML_Training_Anomaly
+            WHERE device = ? AND feature = ? AND model = ?
+        """, (device, feature, model))
+        id = cursor.fetchone()
+        cursor.close()
+        if id is None:
+            return None
+        return id[0]
   
     @staticmethod
-    def create_ml_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, test_time):
+    def create_ml_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, test_time, pk_id):
         """
         Creates a new entry in the ml_dl_anomaly_testing table.
         :input: db_connection: database
@@ -92,9 +111,9 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO ML_Testing_Anomaly (device, experiment, ransomware, feature, model, TPR, test_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (device, experiment, ransomware, feature, model, TPR, test_time))
+            INSERT INTO ML_Testing_Anomaly (trainings_id, device, experiment, ransomware, feature, model, TPR, test_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (pk_id, device, experiment, ransomware, feature, model, TPR, test_time))
         db_connection.commit()
         cursor.close()
 
@@ -134,9 +153,28 @@ class dbqueries:
         if threshold is None:
             return None
         return threshold[0]
+
+    @staticmethod
+    def get_foreign_key_dl(db_connection, device, feature, model):
+        """
+        Gets the id from the DL_Training_Anomaly table.
+        :input: db_connection: database connection, device: device that made the request, feature: 
+        feature that is being used, model: model that is being used
+        :return: the id of the entry
+        """
+        cursor = db_connection.cursor()
+        cursor.execute("""
+            SELECT id FROM DL_Training_Anomaly
+            WHERE device = ? AND feature = ? AND model = ?
+        """, (device, feature, model))
+        id = cursor.fetchone()
+        cursor.close()
+        if id is None:
+            return None
+        return id[0]
         
     @staticmethod
-    def create_dl_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, test_time):
+    def create_dl_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, test_time, pk_id):
         """
         Creates a new entry in the dl_anomaly_testing table.
         :input: db_connection: database
@@ -146,9 +184,9 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO DL_Testing_Anomaly (device, experiment, ransomware, feature, model, TPR, test_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (device, experiment, ransomware, feature, model, TPR, test_time))
+            INSERT INTO DL_Testing_Anomaly (trainings_id, device, experiment, ransomware, feature, model, TPR, test_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (pk_id, device, experiment, ransomware, feature, model, TPR, test_time))
         db_connection.commit()
         cursor.close()
         
