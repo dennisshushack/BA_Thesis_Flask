@@ -8,26 +8,16 @@ import warnings
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer, HashingVectorizer
-
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
-
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
 # M3 (Anomaly & Classification)
 class m3:
-    """
-    Class for data concerning monitor 3 (systemcalls)
-    Creates a cleaned & standardized dataframe ready for training/evaluation
-    for classificaiton or anomaly detection
-    """
     @staticmethod
     def extract_line(line: str, real_timestamp) -> list:
         """
         This function cleans the data and gets rid of the summary in the end of a log file.
-        :input: line: a line from the log file
-        :output: a list with the necessary information
         """
         try:
             if "Summary of events:" in line:
@@ -46,19 +36,14 @@ class m3:
                     syscall = l[7].split('(')[0]
             else:
                 syscall = l[5].split('(')[0]
-
             return [real_timestamp, pid, syscall, time_cost]
         except:
             return None
 
     @staticmethod
-    def clean_data(input_dirs: dict, begin:int = None, end:int = None):
+    def clean_data(input_dirs: dict) -> pd.DataFrame:
         """
-        This function preprocesses the data.
-        Gets rid of unnecessary parts of the log files 
-        and returns .csv files with the necessary information.
-        :input: input_dirs: dictionary with the path & behavior to the input directory where raw data (.log) files are stored,
-        :output: .csv files with the cleaned data
+        This function cleans the data for monitor 3:
         """
         # Iterate over the dictionary input_dirs
         skipped = 0
@@ -87,7 +72,6 @@ class m3:
                                     break
                             inp.close()
                             outp.close()
-
                             # Remove the original .log file:
                             os.remove(input_dir + "/" + inputfile)
                     except:
@@ -95,50 +79,33 @@ class m3:
                         os.remove(input_dir + "/" + inputfile)
                         skipped += 1
                         continue
-            if begin is not None and end is not None:            
-                for outputfile in os.listdir(input_dir):
-                    output_filename = outputfile.split('.')[0]
-                    if int(output_filename) < begin or int(output_filename) > end:
-                        os.remove(input_dir + "/" + outputfile)
-                    
-
+            
     @staticmethod
     def load_scaler(training_path: str, feature:str):
         """
         This function loads the scaler from the pickle file.
-        :input: training_path: path to the directory where the scaler is stored,
-        feature: the feature that is used for the scaler
-        :output: the scaler
         """
         scaler_path = training_path + "/scalers/" + feature + "_scaler.pickle"
         with open(scaler_path, 'rb') as f:
             scaler = pickle.load(f)
-        print("Scaler loaded from: " + scaler_path)
         return scaler
-
 
     @staticmethod
     def create_scaler(df: pd.DataFrame, training_path: str, feature: str):
         """
         This function creates a Standard Scaler object and saves it in a pickle file.
-        :input: df: a dataframe, training_path: path to the directory where the scaler will be saved,
-        :output: a pickle file with the scaler
         """
-
         scaler_path = training_path + '/scalers/'
         if not os.path.exists(scaler_path):
             os.makedirs(scaler_path)
-        
         features_to_scale = df[feature].tolist()
         X_train, X_val = train_test_split(features_to_scale, test_size=.3, shuffle=True, random_state=42)
-
         # Only fit the scaler on the training data:
         scaler = StandardScaler().fit(X_train)
         # Save the scaler:
         with open(f'{scaler_path}{feature}_scaler.pickle', 'wb') as f:
             pickle.dump(scaler, f)
         
-    
     @staticmethod
     def standardize(df: pd.DataFrame, category: str, training_path: str):
         """
@@ -156,7 +123,11 @@ class m3:
 
         for feature in features:
             # Create a new dataframe with ids, behavior and the feature:
-            df_feature = pd.DataFrame({'id': df['id'], 'behavior': df['behavior'], feature: df[feature]})
+            if category == 'training':
+                df_feature = pd.DataFrame({'id': df['id'], 'behavior': df['behavior'], feature: df[feature]})
+            else:
+                df_feature = pd.DataFrame({'id': df['id'], feature: df[feature]})
+
             if feature == 'hashing_1gram':
                 feature_normalized_df[feature] = df_feature
                 continue
@@ -175,8 +146,8 @@ class m3:
                 scaler = m3.load_scaler(training_path, feature)
                 # Standardise the feature:
                 data = scaler.transform(df_feature[feature].tolist())
-                normaled_df = pd.DataFrame([df_feature['id'].tolist(), df_feature['behavior'].tolist(), data.tolist()]).transpose()
-                normaled_df.columns = ['id', 'behavior', feature]
+                normaled_df = pd.DataFrame([df_feature['id'].tolist(), data.tolist()]).transpose()
+                normaled_df.columns = ['id', feature]
                 feature_normalized_df[feature] = normaled_df
             
         return feature_normalized_df
@@ -206,12 +177,10 @@ class m3:
             location = open(f'{vec_path}{hvn}.pickle', 'rb')
             hv = pickle.load(location)
             vectorizers[hvn] = hv
-
         return vectorizers
 
-
     @staticmethod
-    def apply_vectorizer(features: list, corpus: list, training_path: str):
+    def apply_vectorizer(features: list, corpus: list, training_path: str, category: str):
         """
         This applies the vectorizers to the corpus.
         :input: features: list, corpus: list, training_path: str
@@ -223,44 +192,35 @@ class m3:
             cvn = f'countvectorizer_ngram_1-{n}'
             tfn = f'tfidfvectorizer_ngram_1-{n}'
             hvn = f'hashingvectorizer_ngram_1-{n}'
-
             # CountVectorizer:
             cv = vectorizers[cvn]
             # TfidfVectorizer:
             tf = vectorizers[tfn]
             # HashVectorizer:
             hv = vectorizers[hvn]
-
             # CountVectorizer:
             cv_features = cv.transform(corpus)
             cv_features = cv_features.toarray()
-
             # TfidfVectorizer:
             tf_features = tf.transform(corpus)
             tf_features = tf_features.toarray()
-
             # HashVectorizer:
             hv_features = hv.transform(corpus)
             hv_features = hv_features.toarray()
-
             # Append frequency features:
             features.append(cv_features)
-
             # Append tfidf features:
             features.append(tf_features)
-
             # Append hashing features:
             features.append(hv_features)
 
-
         encoded_trace_df = pd.DataFrame(features).transpose()
-        # Please adjust accordingly if higher ngrams are used:
-        encoded_trace_df.columns = ['id', 'behavior', 'frequency_1gram', 'tfidf_1gram', 
-        'hashing_1gram']
-
+        if category == 'training':
+            encoded_trace_df.columns = ['id', 'behavior', 'frequency_1gram', 'tfidf_1gram', 'hashing_1gram']
+        else:
+            encoded_trace_df.columns = ['id', 'frequency_1gram', 'tfidf_1gram', 'hashing_1gram']
         return encoded_trace_df
 
-    
     @staticmethod
     def create_vectorizer(corpus: list, path: str):
         """
@@ -278,8 +238,8 @@ class m3:
         for n in range(1, 2):
             vectorizers[f'countvectorizer_ngram_1-{n}'] = CountVectorizer(ngram_range=(1, n)).fit(corpus)
             n_gram_dict = vectorizers[f'countvectorizer_ngram_1-{n}'].vocabulary_
-            vectorizers[f'tfidfvectorizer_ngram_1-{n}'] = TfidfVectorizer(ngram_range=(1, n)).fit(corpus)
-            vectorizers[f'hashingvectorizer_ngram_1-{n}'] = HashingVectorizer(ngram_range=(1, n), n_features=2**10).fit(corpus)
+            vectorizers[f'tfidfvectorizer_ngram_1-{n}'] = TfidfVectorizer(ngram_range=(1, n), vocabulary=n_gram_dict).fit(corpus)
+            vectorizers[f'hashingvectorizer_ngram_1-{n}'] = HashingVectorizer(n_features=2**10).fit(corpus)
         
         # Saves every vectorizer in a pickle file:
         for name in vectorizers:
@@ -290,7 +250,6 @@ class m3:
         with open(f'{vec_path}n_gram_dict.pickle', 'wb') as f:  
             pickle.dump(n_gram_dict, f)
 
-    
     @staticmethod
     def from_list_to_str(trace: list):
         """
@@ -307,8 +266,7 @@ class m3:
     def get_corpus(path: str, files: list):
         """
         This function creates a corpus (list) of all the systemcalls in the files.
-        :input: path: str, files: list
-        :output: corpus: list i.e [syscall1 sycall2 syscall3, syscall4 ...]
+        :input: path: str, files: list :output: corpus: list i.e [syscall1 sycall2 syscall3, syscall4 ...]
         """
         corpus = []
         for file in files:
@@ -324,82 +282,131 @@ class m3:
         return corpus
     
     @staticmethod
-    def get_features(input_dirs: dict, category: str, train_path: str, test_path: str = None):
+    def preprocess_data(input_dirs: dict, category: str, training_dirs: list, path:str, mltype = None):
         """
-        This function extracts the features from the raw data using 
-        1) Bag-of-words 2) Tfidf and 3) Hash vectorization 
-        -----------------------------------------------------------
-        :input: input_dirs dictonary with path to .csv files, with the bahaviors
-                category: the category of the data (train vs test)
-        :output: Creates usable features for training 
+        This function creates the features for the training and test set.
         """
-       
-        features = []
-        file_ids, behaviors = [], []
-        corpus = []
-        print("Extracting features...")
-        # Get's all files:
-        for key, value in input_dirs.items():
-            input_dir = value + "/m3"
-            behavior = key
-            files = os.listdir(input_dir)
-            # Sort files by name:
-            files.sort(key=lambda x: x.split('.')[0])
-            file_ids_sub, behaviors_sub = [], []
-
-            # Iterate over the files:
-            for file in files:
-                if '.csv' in file:
-                    file_ids_sub.append(int(file.replace('.csv', '')))
-                    behaviors_sub.append(behavior)
-            
-            # Get the corpus from the files in the input_dir:
-            print("Creating corpus...")
-            corpus_subdirectory = m3.get_corpus(input_dir, files)
-            
-            # Extend the corpus:
-            corpus.extend(corpus_subdirectory)
-
-            # Extend the file_ids:
-            file_ids.extend(file_ids_sub)
-
-            # Extend the behaviors:
-            behaviors.extend(behaviors_sub)
-        
-        features.append(file_ids)
-        features.append(behaviors)
-
-        if category == 'training':
-            # Create the different vectorizers:
-            print("Creating vectorizers...")
-            m3.create_vectorizer(corpus, train_path)
-            # Apply the vectorizers to the corpus:
-            df = m3.apply_vectorizer(features, corpus, train_path)
-        else:
-            df = m3.apply_vectorizer(features, corpus, train_path)
-        
-        # Drop any NaN values in the dataframe:
-        df.dropna(inplace=True)
-
-        # Apply StandardScaler:
-        dict_df = m3.standardize(df, category,train_path)
-
-        # Create directory for the features:
+        list_of_dics = []
+         # 1. Procedure for training (anomaly or classification)
         if category == "training":
-            feat_path = train_path + '/preprocessed/'
+            print("Cleaning training data for monitor 3...")
+            features = []
+            file_ids, behaviors = [], []
+            corpus = []
+            for key, value in input_dirs.items():
+                input_dir = value + "/m3"
+                behavior = key
+                files = os.listdir(input_dir)
+                # Sort files by name:
+                files.sort(key=lambda x: x.split('.')[0])
+                file_ids_sub, behaviors_sub = [], []
+                # Iterate over the files:
+                for file in files:
+                    if '.csv' in file:
+                        file_ids_sub.append(int(file.replace('.csv', '')))
+                        behaviors_sub.append(behavior)
+                print("Creating the corpus...")
+                corpus_subdirectory = m3.get_corpus(input_dir, files)
+                # Extend the corpus:
+                corpus.extend(corpus_subdirectory)
+                # Extend the file_ids:
+                file_ids.extend(file_ids_sub)
+                # Extend the behaviors:
+                behaviors.extend(behaviors_sub)
+            features.append(file_ids)
+            features.append(behaviors)
+            print("Creating the vectorizers...")
+            m3.create_vectorizer(corpus, training_dirs[0])
+            print("Applying the vectorizers...")
+            df = m3.apply_vectorizer(features, corpus, training_dirs[0], category)
+            df.dropna(inplace=True)
+            # Apply StandardScaler:
+            dict_df = m3.standardize(df, category, training_dirs[0])
+            # Drop all columns with NaN values in the dataframes in dict_df:
+            for key, value in dict_df.items():
+                dict_df[key] = value.dropna(axis=1)
+            # Save the dataframes in a pickle file:
+            feat_path = training_dirs[0] + '/preprocessed/'
             if not os.path.exists(feat_path):
                 os.makedirs(feat_path)
-            
-            # Save the dataframes in the dictionary as .csv files:
             for key, value in dict_df.items():
                 value.to_csv(f'{feat_path}{key}.csv', index=False)
-        else:
-            feat_path = test_path + '/preprocessed/'
+            list_of_dics.append(dict_df)
+            return list_of_dics
+
+        # 2. Procedure for testing (anomaly or classification)
+        elif category == "testing":
+            features = []
+            file_ids = []
+            corpus = []
+            for key, value in input_dirs.items():
+                input_dir = value + "/m3"
+                files = os.listdir(input_dir)
+                # Sort files by name:
+                files.sort(key=lambda x: x.split('.')[0])
+                file_ids_sub = []
+                # Iterate over the files:
+                for file in files:
+                    if '.csv' in file:
+                        file_ids_sub.append(int(file.replace('.csv', '')))
+                corpus_subdirectory = m3.get_corpus(input_dir, files)
+                # Extend the corpus:
+                corpus.extend(corpus_subdirectory)
+                # Extend the file_ids:
+                file_ids.extend(file_ids_sub)
+            features.append(file_ids)
+
+            df = m3.apply_vectorizer(features, corpus, training_dirs[0], category)
+            df.dropna(inplace=True)
+            dict_df = m3.standardize(df, category, training_dirs[0])
+            # Drop all columns with NaN values in the dataframes in dict_df:
+            for key, value in dict_df.items():
+                dict_df[key] = value.dropna(axis=1)
+
+            feat_path = path + '/preprocessed/'
             if not os.path.exists(feat_path):
                 os.makedirs(feat_path)
 
             for key, value in dict_df.items():
                 value.to_csv(f'{feat_path}{key}.csv', index=False)
+            list_of_dics.append(dict_df)
+
+            if mltype == None:
+                df = m3.apply_vectorizer(features, corpus, training_dirs[1], category)
+                df.dropna(inplace=True)
+                dict_df = m3.standardize(df, category, training_dirs[1])
+                # Drop all columns with NaN values in the dataframes in dict_df:
+                for key, value in dict_df.items():
+                    dict_df[key] = value.dropna(axis=1)
+                for key, value in dict_df.items():
+                    value.to_csv(f'{feat_path}{key}_classification.csv', index=False)
+                list_of_dics.append(dict_df)
+
+            return list_of_dics
+
+
+
+            
+            
+
+
+
+
+        
+                
+
+
+
+
+
+
+
+
+      
+            
+     
+
+        
 
 
         return dict_df

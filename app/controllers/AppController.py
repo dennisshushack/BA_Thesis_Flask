@@ -1,5 +1,6 @@
 import json
-import os 
+import os
+from unicodedata import category 
 from flask import Blueprint
 import threading
 import sqlite3
@@ -12,81 +13,73 @@ from app.services.m2 import m2
 from app.services.m1 import m1
 from app.services.anomalyml import anomalyml
 from app.services.anomalydl import anomalydl
-from app.services.classificationml import classificationml
-
+from app.services.classificationml import classification
 from app.database.dbqueries import dbqueries
 
 bp = Blueprint('rest', __name__, url_prefix='/rest')
 
 
-def identify_subdirectories(path: str, behavior: str = None) -> dict:
+def identify_subdirectories(path: str)-> dict:
     """
     This function identifies the subdirectories of the given path.
-    :input: path: path of the directory
-    :return: dict of subdirectories
     """
-    # For testing:
-    if behavior != None:
-        subdirectories = {behavior: path + '/' + behavior}
-        return subdirectories
-
-    # For training (classification or anomaly detection):
-    else:
-        subdirectories = {}
-        subdirectory_names = ['normal', 'poc', 'dark','raas']
-        for dirs in os.walk(path):
-            for subdirectory in subdirectory_names:
-                if subdirectory in dirs[1]:
-                    subdirectories[subdirectory] = path + '/' + subdirectory
-        return subdirectories
+    subdirectories = {}
+    for dirs in os.walk(path):
+        for subdirectory in dirs[1]:
+            subdirectories[subdirectory] = path + '/' + subdirectory
+    return subdirectories
 
 def get_paths(db: sqlite3.Connection, category: str, device: str, ml_type: str, path: str) -> dict:
     """
-    This function returns the paths to the training and testing data (wherere the data to preprocess is stored).
-    :input: db: database connection, category: str, device: str,  ml_type: str, path: str
-    :return: paths: dict with the paths to the training and testing data
+    Returns the training paths where the models are saved.
     """
-    paths = {}
-    if category == 'testing':
-        # Location must be stored if the category is testing:
+    if category == 'testing' and ml_type == None:
+        training_path_anomaly = dbqueries.get_training_data_location(db, device, "anomaly")
+        training_path_classification = dbqueries.get_training_data_location(db, device, "classification")
+        training_paths = [training_path_anomaly, training_path_classification]
+    elif category == 'testing' and ml_type != None:
         training_path = dbqueries.get_training_data_location(db, device, ml_type)
-        testing_path = path
+        training_paths = [training_path]
     else:
-        # Otherwise it will be newly created or is already stored:
         if dbqueries.get_training_data_location(db, device, ml_type) != None:
             training_path = path
-            testing_path = None
         else:
             dbqueries.insert_training_data_location(db, device, ml_type, path)
             training_path = path
-            testing_path = None
-    
-    paths['training'] = training_path
-    paths['testing'] = testing_path
-    return paths
+        training_paths = [training_path]
+    return training_paths
 
-def preprocess_data(monitors: list, subdirectories: dict, begin: int, end: int, category: str, training_path: str, testing_path: str) -> dict:
+def preprocess_data(monitors:list , subdirectories: dict, training_paths: list, category: str, ml_type: str, path: str) -> dict:
     """
-    This function preprocesses the data for the given monitors (m1, m2, m3).
-    :input: monitors: list of monitors, subdirectories: dict of subdirectories, begin: int, end: int, category: str, training_path: str, testing_path: str
-    :return: data: dict of dataframes
+    This function preprocesses the data and returns a dictionary with the preprocessed data.
     """
-    preprocessed_data = {}
+    preprocessed_data_training = {}
+    preprocess_data_testing = {}
     for monitor in monitors:
-        # Preprocessing for monitor m1:
+        # Preprocess the data:
         if monitor == 'm1':
-            df_m1, vector_behavior_m1, ids_m1, m1_timestamps = m1.clean_data(subdirectories, begin, end)
-            m1_preprocessed = m1.preprocess_data(df_m1, vector_behavior_m1, ids_m1, category, training_path, m1_timestamps, testing_path)
-            preprocessed_data['m1'] = m1_preprocessed
+            return_dfs = m1.preprocess_data(subdirectories, category, training_paths, path, ml_type)
+            if category == "training":
+                preprocessed_data_training['m1'] = return_dfs[0]
+            elif category == "testing" and ml_type != None:
+                preprocess_data_testing['m1'] = return_dfs[0]
+            else:
+                preprocess_data_testing['anomaly_m1'] = return_dfs[0]
+                preprocess_data_testing['classification_m1'] = return_dfs[0]
 
-        # Preprocessing for monitor m2:
         elif monitor == 'm2':
-            df_m2, vector_behavior_m2, ids_m2, m2_timestamps = m2.clean_data(subdirectories, begin, end)
-            m2_preprocessed = m2.preprocess_data(df_m2, vector_behavior_m2, ids_m2, category, training_path, m2_timestamps, testing_path)
-            preprocessed_data['m2'] = m2_preprocessed
+            return_dfs = m1.preprocess_data(subdirectories, category, training_paths, path, ml_type)
+            if category == "training":
+                preprocessed_data_training['m2'] = return_dfs[0]
+            elif category == "testing" and ml_type != None:
+                preprocess_data_testing['m2'] = return_dfs[0]
+            else:
+                preprocess_data_testing['anomaly_m2'] = return_dfs[0]
+                preprocess_data_testing['classification_m2'] = return_dfs[0]
 
         # Preprocessing for monitor m3:
         elif monitor == "m3":
+            print("Preprocessing data for m3...")
             m3.clean_data(subdirectories,begin,end)
             dict_df = m3.get_features(subdirectories, category, training_path, testing_path)
             for key, value in dict_df.items():
@@ -146,7 +139,6 @@ def test_anomaly_detection(db: sqlite3.Connection, device: str, preprocessed_dat
         threshhold = float(threshhold)
         print(threshhold)
         model_list = anomalydl.validate(dataframe, training_path, feature, threshhold)
-        print("hello")
         TPR = model_list[0]
         test_time = model_list[1]
         # Get the correct primary key to use, as a foreign key:
@@ -157,59 +149,48 @@ def test_anomaly_detection(db: sqlite3.Connection, device: str, preprocessed_dat
 
 
 
-def background(data: json):
+def background(data: json, category: str):
     """
-    Is executed as a seperate thread in the background.
-    As it is very process heavy the user will get informed before the job starts.
-    Takes as an input the data that is sent to the endpoint (see main endpoint below)
+    Background thread which runs the anomaly detection.
     """
     app = create_app()
     with app.app_context():
-        
         # Get the data from the database:
+        dbService = dbqueries()
         try:
             db = get_db()
         except:
             app.logger.debug('Database not found')
             return
-        
+            
         # Get the data from the request
-        device = data['device']
-        category = data['category']
+        if category == "training":
+            behavior = data['behavior']
+
+        # General data also for testing:
         ml_type = data['ml_type']
-        monitors = data['monitors']
-        behavior = data['behavior']
+        device = data['device']
+        monitors = data['monitors'].split(',')
         path = data['path']
-        begin = data['begin']
-        end = data['end']
         experiment = data['experiment']
-        monitors = monitors.split(',')
-        if begin == 'None':
-            begin = None
-        if end == 'None':
-            end = None
-        
-        # The testing folder contains experiments:
+
+        # The testing folder contains experiment subdirectries:
         if category == "testing":
             path = path + '/' + experiment
-        
-         # Insert the data into the database table post_requests:
-        dbService = dbqueries()
-        dbService.insert_into_post_requests(db, device, category, ml_type, str(monitors), behavior, path)
 
         # Get the paths to the training or testing data:
-        paths = get_paths(db, category, device, ml_type, path)
-        training_path = paths['training']
-        testing_path = paths['testing']
+        training_paths = get_paths(db, category, device, ml_type, path)
 
-        # Find the subdirectories (i.e testing may have multiple experiments or classification may have multiple ransomwares):
-        if category == 'testing':
-            subdirectories = identify_subdirectories(path, behavior)
-        else:
-            subdirectories = identify_subdirectories(path)    
+        # Find the subdirectories of the path:
+        subdirectories = identify_subdirectories(path)   
 
         # Preprocess the data:
-        preprocessed_data = preprocess_data(monitors, subdirectories, begin, end, category, training_path, testing_path)
+        preprocessed_data = preprocess_data(monitors, subdirectories, training_paths, category, ml_type, path)
+
+
+
+
+
       
         # Only for Anomaly detection training:
         if ml_type == 'anomaly' and category == 'training':
@@ -225,7 +206,7 @@ def background(data: json):
         if ml_type == 'classification' and category == 'training':
             for feature, dataframe in preprocessed_data.items():
                 print("Starting classification ML training...")
-                classificationml.train(dataframe, training_path, feature)                
+                classification.train(dataframe, training_path, feature)                
                 print("Classification ML training finished.")
                 
         print("Done")
@@ -237,29 +218,30 @@ def background(data: json):
 @login_required
 def test():
     """
-    This endpoint is used to test, if the server is up
+    This endpoint is used to test, if the server is up!
     """
     return jsonify({'message': 'Server is up'})
     
     
-@bp.route('/main', methods=['POST'])
+
+@bp.route('/training', methods=['POST'])
 @login_required
-def main():
+def training():
     """
     This endpoint is used to preprocess the data for Machine Learning and Deep Larning models and then train
-    or evaluate the models.
+    or evaluate the models with collected data and not live data
     :input:
     1. device: The device to be used for the training (CPU id)
-    2. category: The category of the data to be used for the training (training or testing)
-    3. ml_type: The type of the machine learning model to be used (classification or anomaly)
-    4. behavior: The behavior to be used for the training (normal, poc, dark or raas)
-    5. path: The path to the data to be used for the training/evaluation
-    6. begin: A timestamp to be used for the training/evaluation (preprocssing)
-    7. end: A timestamp to be used for the training/evaluation (preprocessing)
-    8. experiment: description of the monitoring 
-    9. monitors: list of monitors to be used for the training/evaluation
+    2. ml_type: The type of the machine learning model to be used (classification or anomaly)
+    3. behavior: The behavior to be used for the training (normal, poc, dark or raas)
+    4. path: The path to the data to be used for the training/evaluation
+    5. begin: A timestamp to be used for the training/evaluation (preprocssing)
+    6. end: A timestamp to be used for the training/evaluation (preprocessing)
+    7. experiment: description of the monitoring 
+    8. monitors: list of monitors to be used for the training/evaluation
     """
-    
+    category = 'training'
+
     # Checks, if the input body is in a JSON format:
     if not request.is_json:
         return jsonify({"status": "error", "message": "input error not json"})
@@ -271,10 +253,3 @@ def main():
     threading.Thread(target=background, args=(data,)).start()
     return jsonify({"status": "ok", "message": "started"})
 
-
-
-
-
-
-
-   

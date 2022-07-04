@@ -5,18 +5,6 @@ DROP TABLE IF EXISTS ML_Testing_Anomaly;
 DROP TABLE IF EXISTS DL_Training_Anomaly;
 DROP TABLE IF EXISTS DL_Testing_Anomaly;
 
-/* Table for all incoming post requests */
-CREATE TABLE post_requests (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  device TEXT NOT NULL,
-  category TEXT NOT NULL,
-  ml_type TEXT NOT NULL,
-  monitors TEXT NOT NULL,
-  behavior TEXT NOT NULL,
-  training_path TEXT NOT NULL,
-  arrival TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 /* A table with the location of the training data */
 CREATE TABLE training_data_location(
   id INTEGER PRIMARY KEY AUTOINCREMENT,

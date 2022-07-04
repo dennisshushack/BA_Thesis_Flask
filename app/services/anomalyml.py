@@ -7,10 +7,9 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-from pyod.models.iforest import IForest
-from pyod.models.ocsvm import OCSVM
-from pyod.models.lof import LOF
-
+from sklearn.ensemble import IsolationForest
+from sklearn.svm import OneClassSVM
+from sklearn.neighbors import LocalOutlierFactor
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
@@ -42,7 +41,7 @@ class anomalyml:
         X = np.array(X)
 
         # Labels y for later use to calculate TPR:
-        y = [1 for i in range(0,len(X))]
+        y = [-1 for i in range(0,len(X))]
 
         # Train Loop:
         for classifier in classifiers:
@@ -84,11 +83,10 @@ class anomalyml:
         # Defined contamination:s
         contamination = 0.05
 
-        # Used classifiers:
         classifiers = {
-            'IsolationForest': IForest(random_state=42, contamination=contamination),
-            'OneClassSVM':  OCSVM(kernel='rbf',gamma=0.0001, nu=0.3, contamination=contamination),
-            'LocalOutlierFactor': LOF(n_neighbors=50, contamination=contamination)
+            'IsolationForest': IsolationForest(contamination=contamination, random_state=42),
+            'OneClassSVM': OneClassSVM(cache_size=200, gamma='scale', kernel='rbf',nu=0.05,  shrinking=True, tol=0.001,verbose=False),
+            'LocalOutlierFactor': LocalOutlierFactor(contamination=contamination, novelty=True),
         }
         
         # Create a list from the last column of the dataframe
@@ -97,25 +95,21 @@ class anomalyml:
         X = np.array(X)
 
         # Labels y for later use to calculate FPR:
-        y = [0 for i in range(0,len(X))]
+        y = [1 for i in range(0,len(X))]
 
         # Create a train-test split:
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=True, random_state=42)
 
         # Train the models and save them:
+        # Train the models and save them:
         for name, clf in classifiers.items():
             results = {name: []}
             t1 = time.time()
-            try:
-                clf.fit(X_train)
-                t2=time.time()
-                y_pred = clf.predict(X_val)
-                val_score = accuracy_score(y_val,y_pred)
-                results[name].append(val_score)
-            except:
-                t2 = time.time()
-                y_pred = 0
-                val_score = -10
+            clf.fit(X_train)
+            t2=time.time()
+            y_pred = clf.predict(X_val)
+            val_score = accuracy_score(y_val,y_pred)
+            results[name].append(val_score)
             training_time = t2 - t1
             results[name].append(training_time)
             model_list.append(results)
