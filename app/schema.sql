@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS ML_Training_Anomaly;
 DROP TABLE IF EXISTS ML_Testing_Anomaly;
 DROP TABLE IF EXISTS DL_Training_Anomaly;
 DROP TABLE IF EXISTS DL_Testing_Anomaly;
+DROP TABLE IF EXISTS live_anomaly;
 
 /* A table with the location of the training data */
 CREATE TABLE training_data_location(
@@ -64,3 +65,14 @@ CREATE TABLE DL_Testing_Anomaly(
   FOREIGN KEY(trainings_id) REFERENCES DL_Training_Anomaly(id)
   );
 
+/* Table for live evaluation */
+CREATE TABLE live_anomaly(
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+device TEXT NOT NULL,
+ml_type TEXT NOT NULL,
+algo TEXT NOT NULL,
+feature TEXT NOT NULL,
+time_stamp INTEGER NOT NULL,
+anomaly_class INTEGER NOT NULL,
+testing_time FLOAT NOT NULL
+);

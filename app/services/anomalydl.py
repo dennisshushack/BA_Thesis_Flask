@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from app.database.dbqueries import dbqueries
 
 # Used to ignore annoying tensorflow warnings:
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
@@ -80,10 +81,35 @@ class anomalydl:
         y_pred = []
         for i in range(0,len(train_loss)):
             if train_loss[i] < threshold:
-                y_pred.append(1)
+                y_pred.append(0)
             else:
-                y_pred.append(-1)
+                y_pred.append(1)
         return y_pred
+    
+    @staticmethod
+    def validate_live(df, train_path, feature, db, device, threshold):
+        model_list = []
+        X = df[feature].tolist()
+        X = np.array(X)
+        timestamp = df['timestamps'].tolist()
+        time_stamp = timestamp[0]
+        y = [1]
+         
+        # Load the trained model:
+        with open(train_path + "/MLmodels/" + feature + "autoencoder.pickle", "rb") as f:
+            model = pickle.load(f)
+        
+        t1 = time.time()
+        reconstruction = model.predict(X)
+        t2 = time.time()
+        test_time = t2 - t1
+        loss = mae(X, reconstruction)
+        # Get the y_pred:
+        y_pred = anomalydl.append_labels(loss, threshold)
+        y_pred = y_pred[0]
+        y_pred = int(y_pred)
+        dbqueries.insert_into_live(db, device, "anomaly", "autoencoder", feature, time_stamp, y_pred, test_time)
+
 
     @staticmethod
     def validate(df: pd.DataFrame, train_path: str, feature: str, threshold: float):
@@ -102,7 +128,7 @@ class anomalydl:
         X = np.array(X)
 
         # Labels y for later use to calculate TPR:
-        y = [-1 for i in range(0,len(X))]
+        y = [1 for i in range(0,len(X))]
         
         # Load the trained model:
         with open(train_path + "/MLmodels/" + feature + "autoencoder.pickle", "rb") as f:
@@ -145,7 +171,7 @@ class anomalydl:
         X = np.array(X)
 
         # Labels y for later use to calculate FPR:
-        y = [1 for i in range(0,len(X))]
+        y = [0 for i in range(0,len(X))]
 
         # Create a train-test split:
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=True, random_state=42)

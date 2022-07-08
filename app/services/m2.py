@@ -12,7 +12,7 @@ if not sys.warnoptions:
 # M2 (Anomaly & Classification)
 class m2:
     @staticmethod
-    def clean_data(input_dirs: dict, category: str) -> pd.DataFrame:
+    def clean_data(input_dirs: dict) -> pd.DataFrame:
         # Cleans the data for monitor 2:
         df = pd.DataFrame()
         vector_behavior = []
@@ -41,8 +41,7 @@ class m2:
                 # Check if there are any duplicate rows:
                 file_df.drop_duplicates(inplace=True)
                 # Add the behavior to the vector_behavior list for every row:
-                if category == "training":
-                    vector_behavior.extend([behavior] * len(file_df))
+                vector_behavior.extend([behavior] * len(file_df))
                 # Add the file name to the ids list for every row:
                 ids.extend([file] * len(file_df))
                 # Append the dataframe to the dataframe df
@@ -89,18 +88,14 @@ class m2:
         
 
     @staticmethod
-    def preprocess_data(input_dirs: dict, category: str, training_dirs: list, path:str, mltype = None) -> pd.DataFrame:
+    def preprocess_data(input_dirs: dict, category: str, training_dirs: list, path:str) -> pd.DataFrame:
         """
         Preprocesses the data for monitor 2
         """
-        return_dfs = []
-        # 1. Procedure for training (anomaly or classification)
         if category == "training":
-            print("Cleaning training data for monitor 1...")
-            df, vector_behavior, ids, timestamps = m2.clean_data(input_dirs, category)
-            print("Creating a sclaer for the training data...")
+            # 1. Procedure for training (anomaly or classification)
+            df, vector_behavior, ids, timestamps = m2.clean_data(input_dirs)
             scaler = m2.create_scaler(df, training_dirs[0])
-            print("Standardizing the training data...")
             m2_standardized = m2.load_scaler_and_standardize(df, training_dirs[0])
             features = []
             features.append(ids)
@@ -110,18 +105,19 @@ class m2:
             m2_preprocessed = pd.DataFrame(features).transpose()
             m2_preprocessed.columns = ["id", "timestamps", "behavior", "m2"]
             m2_preprocessed.dropna(inplace=True)
-            # Save the preprocessed data:
+            
+            # output directory for the preprocessed data:
             output_dir = training_dirs[0] + "/preprocessed/"
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
+            
+            # Save the preprocessed data to a pickle file in the output directory:
             m2_preprocessed.to_csv(output_dir + "m2_preprocessed.csv", index=False)
-            return_dfs.append(m2_preprocessed)
-            return return_dfs
 
-        # 2. Procedure for testing (anomaly and classification)
         elif category == "testing":
-            df, vector_behavior, ids, timestamps = m2.clean_data(input_dirs, category)
-            # Save the preprocessed data:
+            df, vector_behavior, ids, timestamps = m2.clean_data(input_dirs)
+           
+            # Output directory for the preprocessed data:
             output_dir =  path + "/preprocessed/"
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
@@ -130,25 +126,12 @@ class m2:
             features = []
             features.append(ids)
             features.append(timestamps)
+            features.append(vector_behavior)
             features.append(m2_standardized)
             m2_preprocessed = pd.DataFrame(features).transpose()
-            m2_preprocessed.columns = ["id", "timestamps", "m2"]
+            m2_preprocessed.columns = ["id", "timestamps", "behavior", "m2"]
             m2_preprocessed.dropna(inplace=True)
             m2_preprocessed.to_csv(output_dir + "m2_preprocessed.csv", index=False)
-            return_dfs.append(m2_preprocessed)
 
-            # If the malwaretype is not given we return both the dataframe for classification & anomaly detection
-            if mltype == None:
-                m1_standardized_classification = m2.load_scaler_and_standardize(df, training_dirs[1])
-                features_cl = []
-                features_cl.append(ids)
-                features_cl.append(timestamps)
-                features_cl.append(m1_standardized_classification)
-                m2_preprocessed_cl = pd.DataFrame(features_cl).transpose()
-                m2_preprocessed_cl.columns = ["id", "timestamps", "m2"]
-                m2_preprocessed_cl.dropna(inplace=True)
-                m2_preprocessed_cl.to_csv(output_dir + "m2_preprocessed_classification.csv", index=False)
-                return_dfs.append(m2_preprocessed_cl)
-
-            return return_dfs
+        return m2_preprocessed
 

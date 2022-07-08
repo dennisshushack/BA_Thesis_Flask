@@ -12,7 +12,9 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
-# M3 (Anomaly & Classification)
+##############################################################################################################################
+#                                                   Data Cleaning
+##############################################################################################################################
 class m3:
     @staticmethod
     def extract_line(line: str, real_timestamp) -> list:
@@ -79,7 +81,10 @@ class m3:
                         os.remove(input_dir + "/" + inputfile)
                         skipped += 1
                         continue
-            
+
+##############################################################################################################################
+#                                                  Data Standardization
+##############################################################################################################################   
     @staticmethod
     def load_scaler(training_path: str, feature:str):
         """
@@ -116,19 +121,17 @@ class m3:
         features = [ 
         'frequency_1gram', 
         'tfidf_1gram',
-        'hashing_1gram'
-        ]
+        'hashingvectorizer_1gram',
+        'sequence_1gram',
+       ]
 
         feature_normalized_df = {}
 
         for feature in features:
             # Create a new dataframe with ids, behavior and the feature:
-            if category == 'training':
-                df_feature = pd.DataFrame({'id': df['id'], 'behavior': df['behavior'], feature: df[feature]})
-            else:
-                df_feature = pd.DataFrame({'id': df['id'], feature: df[feature]})
-
-            if feature == 'hashing_1gram':
+            df_feature = pd.DataFrame({'id': df['id'], 'behavior': df['behavior'], feature: df[feature]})
+            
+            if feature == 'sequence_1gram' or feature == 'hashingvectorizer_1gram':
                 feature_normalized_df[feature] = df_feature
                 continue
 
@@ -146,11 +149,15 @@ class m3:
                 scaler = m3.load_scaler(training_path, feature)
                 # Standardise the feature:
                 data = scaler.transform(df_feature[feature].tolist())
-                normaled_df = pd.DataFrame([df_feature['id'].tolist(), data.tolist()]).transpose()
-                normaled_df.columns = ['id', feature]
+                normaled_df = pd.DataFrame([df_feature['id'].tolist(), df_feature['behavior'].tolist(), data.tolist()]).transpose()
+                normaled_df.columns = ['id', 'behavior', feature]
                 feature_normalized_df[feature] = normaled_df
             
         return feature_normalized_df
+
+##############################################################################################################################
+#                                                  Creating and Loading Vectorizers / Dictionarys
+##############################################################################################################################
 
     @staticmethod
     def load_vectorizers(path: str):
@@ -164,7 +171,8 @@ class m3:
         for n in range(1, 2):
             cvn = f'countvectorizer_ngram_1-{n}'
             tfn = f'tfidfvectorizer_ngram_1-{n}'
-            hvn = f'hashingvectorizer_ngram_1-{n}'
+            hvf = f'hashingvectorizer_ngram_1-{n}'
+            ngd = f'sequence_1gram'
         
             location = open(f'{vec_path}{cvn}.pickle', 'rb')
             cv = pickle.load(location)
@@ -174,15 +182,21 @@ class m3:
             tf = pickle.load(location)
             vectorizers[tfn] = tf
 
-            location = open(f'{vec_path}{hvn}.pickle', 'rb')
+            location = open(f'{vec_path}{ngd}.pickle', 'rb')
             hv = pickle.load(location)
-            vectorizers[hvn] = hv
+            vectorizers[ngd] = hv
+
+            location = open(f'{vec_path}{hvf}.pickle', 'rb')
+            tf = pickle.load(location)
+            vectorizers[hvf] = tf
+
+        
         return vectorizers
 
     @staticmethod
-    def apply_vectorizer(features: list, corpus: list, training_path: str, category: str):
+    def apply_vectorizer(features: list, corpus_dataframe:list, corpus: list, training_path: str):
         """
-        This applies the vectorizers to the corpus.
+        This applies the vectorizers and dictionnaries to the corpus.
         :input: features: list, corpus: list, training_path: str
         :output: dataframe: pd.DataFrame
         """
@@ -191,34 +205,66 @@ class m3:
         for n in range(1, 2):
             cvn = f'countvectorizer_ngram_1-{n}'
             tfn = f'tfidfvectorizer_ngram_1-{n}'
-            hvn = f'hashingvectorizer_ngram_1-{n}'
+            hvf = f'hashingvectorizer_ngram_1-{n}'
+            ngd = f'sequence_1gram'
+
             # CountVectorizer:
             cv = vectorizers[cvn]
             # TfidfVectorizer:
             tf = vectorizers[tfn]
-            # HashVectorizer:
-            hv = vectorizers[hvn]
+            #HashingVectorizer:
+            hv = vectorizers[hvf]
+            # Sequence:
+            ngd = vectorizers[ngd]
+
             # CountVectorizer:
             cv_features = cv.transform(corpus)
             cv_features = cv_features.toarray()
+
             # TfidfVectorizer:
             tf_features = tf.transform(corpus)
             tf_features = tf_features.toarray()
-            # HashVectorizer:
+
+            # HashingVectorizer:
             hv_features = hv.transform(corpus)
             hv_features = hv_features.toarray()
+
+            # Dict Sequence:
+            dict_sequence_features = []
+            # Check if 'unk' is in the dictionary:
+        
+            for trace in corpus_dataframe:
+                try:
+                    syscall_trace = m3.replace_with_unk(trace['syscall'].to_list(), ngd)
+                    dict_sequence = m3.get_dict_sequence(syscall_trace, ngd)
+                    # Create an array with the first 1000 elements in the dict_sequence:
+                    new_sequence = dict_sequence[:1000]
+                    dict_sequence_features.append(new_sequence)
+                except:
+                    continue
+            # Check, that every array in dict_sequence_features has the same length:
+            for array in dict_sequence_features:
+                if len(array) != len(dict_sequence_features[0]):
+                    print('Error: dict_sequence_features has different lengths!')
+                    # Remove the array with the wrong length:
+                    dict_sequence_features.remove(array)
+                    break
+            
+            dict_sequence_features = np.array(dict_sequence_features)
+
+
             # Append frequency features:
             features.append(cv_features)
             # Append tfidf features:
             features.append(tf_features)
             # Append hashing features:
             features.append(hv_features)
+            # Append sequence features:
+            features.append(dict_sequence_features)
+     
 
         encoded_trace_df = pd.DataFrame(features).transpose()
-        if category == 'training':
-            encoded_trace_df.columns = ['id', 'behavior', 'frequency_1gram', 'tfidf_1gram', 'hashing_1gram']
-        else:
-            encoded_trace_df.columns = ['id', 'frequency_1gram', 'tfidf_1gram', 'hashing_1gram']
+        encoded_trace_df.columns = ['id', 'behavior', 'frequency_1gram', 'tfidf_1gram', 'hashingvectorizer_1gram', 'sequence_1gram']
         return encoded_trace_df
 
     @staticmethod
@@ -236,20 +282,74 @@ class m3:
         
         # Only creates 1-gram can be adjusted:
         for n in range(1, 2):
+            print("Creating Count Vectorizer...")
             vectorizers[f'countvectorizer_ngram_1-{n}'] = CountVectorizer(ngram_range=(1, n)).fit(corpus)
             n_gram_dict = vectorizers[f'countvectorizer_ngram_1-{n}'].vocabulary_
+            vectorizers['n_gram_dict'] = n_gram_dict
+            print("Creating systemcall dictionary...")
+            syscall_dict = m3.get_syscall_dict(n_gram_dict)
+            syscall_dict = m3.add_unk_to_dict(syscall_dict)
+            vectorizers['sequence_1gram'] = syscall_dict
+            print("Creating Tfidf Vectorizer...")
             vectorizers[f'tfidfvectorizer_ngram_1-{n}'] = TfidfVectorizer(ngram_range=(1, n), vocabulary=n_gram_dict).fit(corpus)
-            vectorizers[f'hashingvectorizer_ngram_1-{n}'] = HashingVectorizer(n_features=2**10).fit(corpus)
+            print("Creating Hashing Vectorizer...")
+            vectorizers[f'hashingvectorizer_ngram_1-{n}'] = HashingVectorizer(ngram_range=(1, n), norm='l2', n_features=len(n_gram_dict)).fit(corpus)
         
         # Saves every vectorizer in a pickle file:
         for name in vectorizers:
             with open(f'{vec_path}{name}.pickle', 'wb') as f:
                 pickle.dump(vectorizers[name], f)
 
-        # Saves n_gram_dict in a pickle file:
-        with open(f'{vec_path}n_gram_dict.pickle', 'wb') as f:  
-            pickle.dump(n_gram_dict, f)
 
+##############################################################################################################################
+#                                                  Syscall sequence functions
+##############################################################################################################################
+    @staticmethod
+    def get_syscall_dict(ngrams_dict):
+        """
+        Creates the system call dictionnairy 
+        """
+        syscall_dict = {}
+        i = 0
+        for ngram in ngrams_dict:
+            if len(ngram.split()) == 1:
+                syscall_dict[ngram] = i
+                i+=1
+        return syscall_dict
+    
+    @staticmethod
+    def add_unk_to_dict(syscall_dict):
+        total = len(syscall_dict)
+        syscall_dict['unk'] = total
+        return syscall_dict
+
+    @staticmethod
+    def replace_with_unk(syscall_trace, syscall_dict):
+        """
+        Replaces all values in the systemcall trace with 
+        unique, if they do not appear in the systemcall dict.
+        """
+        for i, sc in enumerate(syscall_trace):
+            if sc.lower() not in syscall_dict:
+                syscall_trace[i] = 'unk'
+        return syscall_trace
+    
+    @staticmethod
+    def get_dict_sequence(trace,term_dict):
+        """
+        Gets the actual sequence of systemcalls
+        """
+        dict_sequence = []
+        for syscall in trace:
+            if syscall in term_dict:
+                dict_sequence.append(term_dict[syscall])
+            else:
+                dict_sequence.append(term_dict['unk'])
+        return dict_sequence
+
+##############################################################################################################################
+#                                                  Data Processing 
+##############################################################################################################################
     @staticmethod
     def from_list_to_str(trace: list):
         """
@@ -268,7 +368,7 @@ class m3:
         This function creates a corpus (list) of all the systemcalls in the files.
         :input: path: str, files: list :output: corpus: list i.e [syscall1 sycall2 syscall3, syscall4 ...]
         """
-        corpus = []
+        corpus_dataframe, corpus = [], []
         for file in files:
             if '.csv' in file:
                 file_path = path + "/" + file
@@ -276,119 +376,100 @@ class m3:
                     trace = pd.read_csv(file_path)
                 except:
                     continue
+                corpus_dataframe.append(trace)
                 tr = trace['syscall'].tolist()
                 longstr = m3.from_list_to_str(tr)
                 corpus.append(longstr)
-        return corpus
+        return corpus_dataframe, corpus
     
+    ###############################################################################################################################
+    #                                                  Main function
+    ###############################################################################################################################
+
+
     @staticmethod
-    def preprocess_data(input_dirs: dict, category: str, training_dirs: list, path:str, mltype = None):
+    def preprocess_data(input_dirs: dict, category: str, training_dirs: list, path:str):
         """
         This function creates the features for the training and test set.
         """
-        list_of_dics = []
-         # 1. Procedure for training (anomaly or classification)
+        # Step 1: clean data from .log to .csv:
+        m3.clean_data(input_dirs)
+        features = []
+        file_ids, behaviors = [], []
+        corpus_dataframe, corpus = [], []
+        for key, value in input_dirs.items():
+            input_dir = value + "/m3"
+            behavior = key
+            files = os.listdir(input_dir)
+            # Sort files by name:
+            files.sort(key=lambda x: float(x.split('.')[0]))
+            file_ids_sub, behaviors_sub = [], []
+            # Iterate over the files:
+            for file in files:
+                if '.csv' in file:
+                    file_ids_sub.append(int(file.replace('.csv', '')))
+                    behaviors_sub.append(behavior)
+            corpus_dataframe_subdirectory ,corpus_subdirectory = m3.get_corpus(input_dir, files)
+            # Append dataframes:
+            corpus_dataframe.extend(corpus_dataframe_subdirectory)
+            # Extend the corpus:
+            corpus.extend(corpus_subdirectory)
+            # Extend the file_ids:
+            file_ids.extend(file_ids_sub)
+            # Extend the behaviors:
+            behaviors.extend(behaviors_sub)
+        features.append(file_ids)
+        features.append(behaviors)
+
+        # 1. Procedure for training (anomaly or classification)
         if category == "training":
-            print("Cleaning training data for monitor 3...")
-            features = []
-            file_ids, behaviors = [], []
-            corpus = []
-            for key, value in input_dirs.items():
-                input_dir = value + "/m3"
-                behavior = key
-                files = os.listdir(input_dir)
-                # Sort files by name:
-                files.sort(key=lambda x: x.split('.')[0])
-                file_ids_sub, behaviors_sub = [], []
-                # Iterate over the files:
-                for file in files:
-                    if '.csv' in file:
-                        file_ids_sub.append(int(file.replace('.csv', '')))
-                        behaviors_sub.append(behavior)
-                print("Creating the corpus...")
-                corpus_subdirectory = m3.get_corpus(input_dir, files)
-                # Extend the corpus:
-                corpus.extend(corpus_subdirectory)
-                # Extend the file_ids:
-                file_ids.extend(file_ids_sub)
-                # Extend the behaviors:
-                behaviors.extend(behaviors_sub)
-            features.append(file_ids)
-            features.append(behaviors)
-            print("Creating the vectorizers...")
+            print("Creating the sequence features & Vectorizers...")
             m3.create_vectorizer(corpus, training_dirs[0])
             print("Applying the vectorizers...")
-            df = m3.apply_vectorizer(features, corpus, training_dirs[0], category)
+            df = m3.apply_vectorizer(features, corpus_dataframe, corpus, training_dirs[0])
             df.dropna(inplace=True)
-            # Apply StandardScaler:
             dict_df = m3.standardize(df, category, training_dirs[0])
             # Drop all columns with NaN values in the dataframes in dict_df:
             for key, value in dict_df.items():
                 dict_df[key] = value.dropna(axis=1)
+
             # Save the dataframes in a pickle file:
             feat_path = training_dirs[0] + '/preprocessed/'
             if not os.path.exists(feat_path):
                 os.makedirs(feat_path)
+
             for key, value in dict_df.items():
                 value.to_csv(f'{feat_path}{key}.csv', index=False)
-            list_of_dics.append(dict_df)
-            return list_of_dics
+            
 
         # 2. Procedure for testing (anomaly or classification)
         elif category == "testing":
-            features = []
-            file_ids = []
-            corpus = []
-            for key, value in input_dirs.items():
-                input_dir = value + "/m3"
-                files = os.listdir(input_dir)
-                # Sort files by name:
-                files.sort(key=lambda x: x.split('.')[0])
-                file_ids_sub = []
-                # Iterate over the files:
-                for file in files:
-                    if '.csv' in file:
-                        file_ids_sub.append(int(file.replace('.csv', '')))
-                corpus_subdirectory = m3.get_corpus(input_dir, files)
-                # Extend the corpus:
-                corpus.extend(corpus_subdirectory)
-                # Extend the file_ids:
-                file_ids.extend(file_ids_sub)
-            features.append(file_ids)
-
-            df = m3.apply_vectorizer(features, corpus, training_dirs[0], category)
+            df = m3.apply_vectorizer(features, corpus_dataframe, corpus, training_dirs[0])
             df.dropna(inplace=True)
             dict_df = m3.standardize(df, category, training_dirs[0])
             # Drop all columns with NaN values in the dataframes in dict_df:
             for key, value in dict_df.items():
                 dict_df[key] = value.dropna(axis=1)
 
+            # Save the dataframes in a pickle file:
             feat_path = path + '/preprocessed/'
             if not os.path.exists(feat_path):
                 os.makedirs(feat_path)
 
             for key, value in dict_df.items():
                 value.to_csv(f'{feat_path}{key}.csv', index=False)
-            list_of_dics.append(dict_df)
+            
+        
+        return dict_df
 
-            if mltype == None:
-                df = m3.apply_vectorizer(features, corpus, training_dirs[1], category)
-                df.dropna(inplace=True)
-                dict_df = m3.standardize(df, category, training_dirs[1])
-                # Drop all columns with NaN values in the dataframes in dict_df:
-                for key, value in dict_df.items():
-                    dict_df[key] = value.dropna(axis=1)
-                for key, value in dict_df.items():
-                    value.to_csv(f'{feat_path}{key}_classification.csv', index=False)
-                list_of_dics.append(dict_df)
 
-            return list_of_dics
 
 
 
             
-            
+    
 
+            
 
 
 
@@ -409,4 +490,4 @@ class m3:
         
 
 
-        return dict_df
+    

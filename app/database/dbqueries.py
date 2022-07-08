@@ -190,5 +190,41 @@ class dbqueries:
         db_connection.commit()
         cursor.close()
         
+    @staticmethod
+    def insert_into_live(db_connection, device, ml_type, algo, feature, time_stamp, anomaly_class, testing_time):
+        """
+        Inserts a new entry into the live table.
+        :input: db_connection: database connection, device: device that made the request, ml_type: 
+        ml_type that is being used, time_stamp: time it took to test the model, anomaly_class: anomaly class of the model
+        """
+        cursor = db_connection.cursor()
+        cursor.execute("""
+            INSERT INTO live_anomaly (device, ml_type, algo, feature, time_stamp, anomaly_class, testing_time)
+            VALUES (?, ?, ?, ?, ? ,?, ?)
+        """, (device, ml_type, algo, feature, time_stamp, anomaly_class, testing_time))
+        db_connection.commit()
+        cursor.close()
+
+    @staticmethod
+    def get_live_anomaly(db_connection, device, algo, feature):
+        """
+        Gets the anomaly class from the live table.
+        :input: db_connection: database connection, device: device that made the request, ml_type: 
+        ml_type that is being used
+        :return: the anomaly class of the model
+        """
+        cursor = db_connection.cursor()
+        cursor.execute("""
+            SELECT id, time_stamp, anomaly_class FROM live_anomaly
+            WHERE device = ? AND algo = ? AND feature = ?
+        """, (device, algo, feature))
+        anomaly_class = cursor.fetchall()
+        cursor.close()
+        if anomaly_class is None:
+            return None
+        return anomaly_class
+
+
+            
 
         

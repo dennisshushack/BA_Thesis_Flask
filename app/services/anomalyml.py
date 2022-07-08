@@ -5,11 +5,12 @@ import pickle
 import warnings
 import pandas as pd
 import numpy as np
+from app.database.dbqueries import dbqueries
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-from sklearn.ensemble import IsolationForest
-from sklearn.svm import OneClassSVM
-from sklearn.neighbors import LocalOutlierFactor
+from pyod.models.iforest import IForest
+from pyod.models.ocsvm import OCSVM
+from pyod.models.lof import LOF
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
@@ -29,7 +30,6 @@ class anomalyml:
         """
         # List, that will be returned 
         model_list = []
-        behavior = df.iloc[0,1]
 
         ml_path = train_path + '/MLmodels/'
 
@@ -41,7 +41,7 @@ class anomalyml:
         X = np.array(X)
 
         # Labels y for later use to calculate TPR:
-        y = [-1 for i in range(0,len(X))]
+        y = [1 for i in range(0,len(X))]
 
         # Train Loop:
         for classifier in classifiers:
@@ -63,6 +63,39 @@ class anomalyml:
         return model_list
 
     @staticmethod
+    def validate_live(df:pd.DataFrame, train_path: str, feature: str, db_connection, device):
+        ml_path = train_path + '/MLmodels/'
+        classifiers = ["IsolationForest", "OneClassSVM", "LocalOutlierFactor"]
+        X = df[feature].tolist()
+        X = np.array(X)
+
+        timestamp = df['timestamps'].tolist()
+        print(timestamp)
+
+         # Train Loop:
+        for classifier in classifiers:
+
+            # Load the trained model:
+            with open(ml_path + feature + classifier + ".pickle", "rb") as f:
+                model = pickle.load(f)
+            
+            t1 = time.time()
+            print(f"{classifier} {feature}: Start at : {t1}")
+            y_pred = model.predict(X)
+            t2 = time.time()
+            print(f"{classifier} {feature}: End at : {t2}")
+            test_time = t2 - t1
+            print(f"{classifier} {feature}: Test time: {test_time}")
+            time_stamp = timestamp[0]
+            y_pred = y_pred[0]
+            y_pred = int(y_pred)
+            dbqueries.insert_into_live(db_connection, device, "anomaly", classifier, feature, time_stamp, y_pred, test_time)
+
+
+
+
+
+    @staticmethod
     def train(df: pd.DataFrame, train_path: str, feature: str) -> list:
         """
         This function trains the ML algorithms for anomaly detection
@@ -81,12 +114,12 @@ class anomalyml:
             os.makedirs(ml_path)
 
         # Defined contamination:s
-        contamination = 0.05
+        contamination_factor = 0.05
 
         classifiers = {
-            'IsolationForest': IsolationForest(contamination=contamination, random_state=42),
-            'OneClassSVM': OneClassSVM(cache_size=200, gamma='scale', kernel='rbf',nu=0.05,  shrinking=True, tol=0.001,verbose=False),
-            'LocalOutlierFactor': LocalOutlierFactor(contamination=contamination, novelty=True),
+            'IsolationForest':IForest(random_state=42, contamination=contamination_factor),
+            'OneClassSVM':OCSVM(kernel='rbf',gamma=0.0001, nu=0.3, contamination=contamination_factor),
+            'LocalOutlierFactor': LOF(n_neighbors=50, contamination=contamination_factor)
         }
         
         # Create a list from the last column of the dataframe
@@ -95,7 +128,7 @@ class anomalyml:
         X = np.array(X)
 
         # Labels y for later use to calculate FPR:
-        y = [1 for i in range(0,len(X))]
+        y = [0 for i in range(0,len(X))]
 
         # Create a train-test split:
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=True, random_state=42)

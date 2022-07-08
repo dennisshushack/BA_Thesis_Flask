@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import  classification_report
 from sklearn.linear_model import LogisticRegression
+from app.database.dbqueries import dbqueries
 
 
 if not sys.warnoptions:
@@ -20,19 +21,37 @@ class classification:
     for classification.
     """
     @staticmethod
-    def evaluate(df:pd.DataFrame, train_path: str, feature: str):
+    def validate_live(df, training_path, feature, db, device):
         """
         This function evaluates, to which class the sample belongs too.
         """
         X = df[feature].tolist()
         X = np.array(X)
+        time_stamp = df['timestamps'].tolist()
+        time_stamp = time_stamp[0]
+
 
         # Loads the model from the pickle file
-
-        with open(file, 'rb') as f:
+        with open(training_path + "/MLmodels/" + feature + "LogisticRegression" + ".pickle", "rb") as f:
             model = pickle.load(f)
         
-
+        # Predict the class of the sample
+        start_time = time.time()
+        y_pred = model.predict(X)
+        end_time = time.time()
+        testing_time = end_time - start_time
+        y_pred = y_pred[0] 
+        if y_pred == "normal":
+            y_pred = 0
+        elif y_pred == "poc":
+            y_pred = 1
+        elif y_pred == "dark":
+            y_pred = 2
+        else:
+            y_pred = 3
+        
+        # Insert the prediction into the database
+        dbqueries.insert_into_live(db, device, "classification","LogisticRegression", feature, time_stamp,y_pred, testing_time)
 
 
 
