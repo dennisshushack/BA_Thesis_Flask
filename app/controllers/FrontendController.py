@@ -1,17 +1,74 @@
 # This is specific to the frontend:
 import sqlite3
+import json
 from app.db import get_db, close_db, init_app
 from app.services.AuthenticationService import login_required
 from flask import Flask, request, jsonify, render_template, current_app, redirect, url_for, flash, Blueprint
+from app.database.dbqueries import dbqueries
 
 
 bp = Blueprint('admin', __name__, url_prefix='/')
 
 
-@bp.route('/dashboard')
+@bp.route('/')
+@login_required
 def admin_dashboard():
-    return render_template("dashboard.html")
+    return render_template("main.html")
 
-@bp.route('/live')
+@bp.route('/classification/')
 def admin_live():
-    return render_template("live.html")
+    return render_template("classification.html")
+
+# Helpers for this endpoint:
+@bp.route('/get/types', methods=['GET'])
+@login_required
+def get_types():
+    """This method gets the types"""
+    try:
+        db = get_db()
+    except:
+        pass
+    
+    types = dbqueries.get_devices(db)
+    close_db()
+    types = [tuple(row) for row in types]
+    types = json.dumps(types)
+    return types
+
+@bp.route('/get/features', methods=['GET'])
+@login_required
+def get_features():
+    """This method gets the features"""
+    try:
+        db = get_db()
+    except:
+        pass
+    
+    features = dbqueries.get_features(db)
+    close_db()
+    features = [tuple(row) for row in features]
+    features = json.dumps(features)
+    return features
+
+@bp.route('/post/classification', methods=['POST','GET'])
+
+@login_required
+def get_classification():
+    """This method gets the classification"""
+    # Get's the json data from the request:
+    device = request.form.get("device")
+    feature = request.form.get("feature")
+    try:
+        db = get_db()
+    except:
+        pass
+
+    classification = dbqueries.get_live_anomaly(db, device,"LogisticRegression",feature)
+    close_db()
+    classification = [tuple(row) for row in classification]
+    classification = json.dumps(classification)
+    return classification
+
+
+
+

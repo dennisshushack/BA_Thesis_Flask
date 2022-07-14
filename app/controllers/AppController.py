@@ -27,22 +27,14 @@ bp = Blueprint('rest', __name__, url_prefix='/rest')
 ########################################################################################################################
 
 def get_paths(db: sqlite3.Connection, category: str, device: str, ml_type: str, path: str) -> dict:
-    """
-    Returns the training paths where the models are saved. Returns it as a list:
-    """
     if category == 'testing' and ml_type == None:
-        # This is the case when live testing is performed:
         training_path_anomaly = dbqueries.get_training_data_location(db, device, "anomaly")
         training_path_classification = dbqueries.get_training_data_location(db, device, "classification")
         training_paths = [training_path_anomaly, training_path_classification]
-
     elif category == 'testing' and ml_type != None:
-        # For testing collected data:
         training_path = dbqueries.get_training_data_location(db, device, ml_type)
         training_paths = [training_path]
-
     else:
-        # Checks, if the training path is allready in the database:
         if dbqueries.get_training_data_location(db, device, ml_type) != None:
             training_path = path
         else:
@@ -52,95 +44,42 @@ def get_paths(db: sqlite3.Connection, category: str, device: str, ml_type: str, 
     return training_paths
 
 def identify_subdirectories(path: str)-> dict:
-    """
-    This function identifies the subdirectories of the given path.
-    """
     subdirectories = {}
     directories = os.listdir(path)
     for directory in directories:
         subdirectories[directory] = path + '/' + directory
     return subdirectories
 
-def preprocess_data(monitors:list , subdirectories: dict, training_paths: list, category: str, path: str) -> dict:
-    """
-    This function preprocesses the data for m1, m2 and m3 
-    """
-    preprocessed_data = {}
+def preprocess_data(monitors:list , subdirectories: dict, training_paths: list, category: str) -> list:
+    preprocessed_data = []
     for monitor in monitors:
         if monitor == "m1":
-            df = m1.preprocess_data(subdirectories, category, training_paths, path)
-            preprocessed_data['m1'] = df
+            list_m1 = m1.preprocess_data(subdirectories)
+            preprocessed_data.append(list_m1)
         elif monitor == "m2":
-            df = m2.preprocess_data(subdirectories, category, training_paths, path)
-            preprocessed_data['m2'] = df
+            list_m2 = m2.preprocess_data(subdirectories)
+            preprocessed_data.append(list_m2)
         else:
-            dict_df = m3.preprocess_data(subdirectories, category, training_paths, path)
-            for name, df in dict_df.items():
-                preprocessed_data[name] = df
+            list_m3 = m3.preprocess_data(subdirectories, category, training_paths)
+            preprocessed_data.append(list_m3)
     return preprocessed_data
             
-
 def train_anomaly_detection(db: sqlite3.Connection, device: str, preprocessed_data: dict, training_path: str):
-    """
-    This function trains the anomaly detection model (with machine and deep learning).
-    :input: db: database connection, device: str, preprocessed_data: dict, training_path: str
-    :return: None
-    """
     # Training ML Algorithms:
-    for feature, dataframe in preprocessed_data.items():
-        list_anomaly_training = anomalyml.train(dataframe, training_path, feature)
-        for item in list_anomaly_training:
-            for key, value in item.items():
-                model = key
-                TNR = value[0]
-                train_time = value[1]
-                dbqueries.create_ml_anomaly(db, device, feature, model, TNR, train_time)
-
-
-    # Training DL Algorithms:
-    for feature, dataframe in preprocessed_data.items():
-        dict_dl_anomaly = anomalydl.train(dataframe, training_path, feature)
-        TNR = dict_dl_anomaly['TNR']
-        train_time = dict_dl_anomaly['training_time']
-        threshhold = dict_dl_anomaly['threshhold']
-        neurons = str(dict_dl_anomaly['hidden_layers'])
-        dbqueries.create_dl_anomaly(db, device, feature, "autoencoder", TNR, train_time, threshhold, neurons)
-    
+    for feature in preprocessed_data:
+        anomalyml.train(feature, training_path, device, db)
+        anomalydl.train(feature, training_path, device, db)
     return "Done"
 
 def test_anomaly_detection(db: sqlite3.Connection, device: str, preprocessed_data: dict, training_path: str, experiment: str, behavior: str):
-    """
-    This function evaluates the data (testing new unseen data) for anomaly detection.
-    :input: db: database connection, device: str, preprocessed_data: dict, training_path: str, experiment: str, behavior: str
-    :return: None
-    """
+    for feature in preprocessed_data:
+        anomalyml.validate(feature, training_path, device, db, experiment, behavior)
+        anomalydl.validate(feature, training_path, device, db, experiment, behavior)
+    return "Done"
 
-    # Testing ML Algorithms:
-    for feature, dataframe in preprocessed_data.items():
-        list_anomaly_testing = anomalyml.validate(dataframe, training_path, feature)
-        for item in list_anomaly_testing:
-            for key, value in item.items():
-                model = key
-                TPR = value[0]
-                test_time = value[1]
-                # Get the correct primary key to use, as a foreign key:
-                primary_key = dbqueries.get_foreign_key_ml(db, device, feature, model)
-                dbqueries.create_ml_anomaly_testing(db, device, experiment, behavior,feature, model, TPR, test_time, primary_key)
-            
-    # Part Anomaly Detection DL:
-    for feature, dataframe in preprocessed_data.items():
-        print("Testing DL for feature: " + feature)
-        threshhold = dbqueries.get_threshold(db, device, feature)
-        threshhold = float(threshhold)
-        print(threshhold)
-        model_list = anomalydl.validate(dataframe, training_path, feature, threshhold)
-        TPR = model_list[0]
-        test_time = model_list[1]
-        # Get the correct primary key to use, as a foreign key:
-        primary_key = dbqueries.get_foreign_key_dl(db, device, feature, "autoencoder")
-        dbqueries.create_dl_anomaly_testing(db, device, experiment, behavior, feature, "autoencoder",TPR, test_time, primary_key)
-    
-    return
+def train_classification(preprocessed_data: dict, training_path: str):
+    for feature in preprocessed_data:
+        classification.train(feature, training_path)
 
 ###################### Background Threads ##############################
 
@@ -175,7 +114,7 @@ def background_training(data: json):
         subdirectories = identify_subdirectories(path)   
 
         # Preprocess the data:
-        preprocessed_data = preprocess_data(monitors, subdirectories, training_paths, category, path)
+        preprocessed_data = preprocess_data(monitors, subdirectories, training_paths, category)
 
         # Only for Anomaly detection training:
         if ml_type == 'anomaly' and category == 'training':
@@ -187,78 +126,15 @@ def background_training(data: json):
 
         # Only for Classification training:
         if ml_type == 'classification' and category == 'training':
-            for feature, dataframe in preprocessed_data.items():
-                print("Starting classification ML training...")
-                classification.train(dataframe, training_paths[0], feature)                
-                print("Classification ML training finished.")
+             train_classification(preprocessed_data, training_paths[0])
+
+        close_db(db)
+        return "Done"
+           
                 
-        print("Done")
-        return
-
-def background_live_thread(number):
-    while True:
-        time.sleep(number)
-        print("Background thread running...")
-        return
-
-    
-################################# Endpoints #####################################
-
-@bp.route('/test', methods=['GET'])
-def test():
-    """
-    This endpoint is used to test, if the server is up!
-    """
-    return jsonify({'message': 'Server is up'})
-    
-    
-@bp.route('/training', methods=['POST'])
-@login_required
-def training():
-    """
-    This endpoint is used to preprocess the data for Machine Learning and Deep Larning models and then train
-    or evaluate the models with collected data and not live data
-    :input:
-    1. device: The device to be used for the training (CPU id)
-    2. ml_type: The type of the machine learning model to be used (classification or anomaly)
-    3. behavior: The behavior to be used for the training (normal, poc, dark or raas)
-    4. path: The path to the data to be used for the training/evaluation
-    5. begin: A timestamp to be used for the training/evaluation (preprocssing)
-    6. end: A timestamp to be used for the training/evaluation (preprocessing)
-    7. experiment: description of the monitoring 
-    8. monitors: list of monitors to be used for the training/evaluation
-    """
-
-    # Checks, if the input body is in a JSON format:
-    if not request.is_json:
-        return jsonify({"status": "error", "message": "input error not json"})
-
-    # Gets the data from the request:
-    data = request.get_json()
-
-    # Start the background job (prevents the server from being blocked by a request):
-    threading.Thread(target=background_training, args=(data,)).start()
-    return jsonify({"status": "ok", "message": "started"})
-
-@bp.route('/live', methods=['POST'])
-@login_required
-def live():
-    """
-    This endpoint is used for live testing the anomaly detection &
-    classification
-    """
-    
-    # Checks, if the input body is in a JSON format:
-    if not request.is_json:
-        return jsonify({"status": "error", "message": "input error not json"})
-
-    # Gets the data from the request:
+def background_live_thread(data:json):
     dbService = dbqueries()
-    try:
-        db = get_db()
-    except:
-        return jsonify({"status": "error", "message": "database not found"})
-    
+    db = get_db()
     data = request.get_json() 
     device = data['device']
     monitors = data['monitors'].split(',')
@@ -266,16 +142,14 @@ def live():
     category = "testing"
     number = 0
 
-    # Get the paths:
-    training_paths = get_paths(db, category, device, None, path)
-     
-    # Find the subdirectories of the path:
-    subdirectories = identify_subdirectories(path)
-    
-    start_time_preprocessing = time.time()
-    # Preprocess the data:
+    # Get the paths and subdirectories of the path:
     preprocessed_anomaly = {}
     preprocessed_classification = {}
+    training_paths = get_paths(db, category, device, None, path)
+    subdirectories = identify_subdirectories(path)
+    
+    # Preprocess the data:
+   
     for monitor in monitors:
         if monitor == "m1":
             return_dfs = m1live.preprocess_data(subdirectories, training_paths, number)
@@ -302,9 +176,7 @@ def live():
             classification_dict = list_of_return_dict[1]
             for name, df in classification_dict.items():
                 preprocessed_classification[name] = df
-    stop_time_preprocessing = time.time()
-    print("Preprocessing time: " + str(stop_time_preprocessing - start_time_preprocessing))
-    print("Starting evaluation...")
+ 
     
     # Evaluate anomaly detection ML:
     start_time_anomaly = time.time()
@@ -323,8 +195,55 @@ def live():
         classification.validate_live(dataframe, training_paths[1], feature, db, device)
 
 
+
+
+    
+################################# Endpoints #####################################
+
+@bp.route('/test', methods=['GET'])
+def test():
+    """
+    This endpoint is used to test, if the server is up!
+    """
+    return jsonify({'message': 'Server is up'})
+    
+    
+@bp.route('/main', methods=['POST'])
+@login_required
+def training():
+    """
+    Main endpoint for training the ML algorithms.
+    Also for testing the ML algorithms (anomaly detection and classification).
+    """
+    # Checks, if the input body is in a JSON format:
+    if not request.is_json:
+        return jsonify({"status": "error", "message": "input error not json"})
+
+    # Gets the data from the request:
+    data = request.get_json()
+
+    # Start the background job (prevents the server from being blocked by a request):
+    threading.Thread(target=background_training, args=(data,)).start()
     return jsonify({"status": "ok", "message": "started"})
 
+
+
+@bp.route('/live', methods=['POST'])
+@login_required
+def live():
+    """
+    This endpoint is used for live testing the anomaly detection &
+    classification
+    """
+    
+    # Checks, if the input body is in a JSON format:
+    if not request.is_json:
+        return jsonify({"status": "error", "message": "input error not json"})
+
+    # Gets the data from the request:
+    data = request.get_json()
+
+    
 
 
 

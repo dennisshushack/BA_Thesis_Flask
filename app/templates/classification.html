@@ -1,0 +1,182 @@
+{% extends "navigationbar.html" %}
+{{ super() }}
+{% block content %}
+<!-- Dependent dropdown menu with device and feature-->
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+  }
+  .chartBox {
+        width: 900px;
+        padding: 20px;
+        border-radius: 20px;
+        background: white;
+      }
+    </style>
+
+<form class="box">
+    <div class="field">
+      <label class="label">Device</label>
+      <div class="select is-info pb-3 mb-3">
+        <select class="default_select"
+        id="default_select"  name="device"  required>
+            <option value="">Choose a Device...</option>
+        </select>
+    </div>
+  
+    <div class="field">
+        <label class="label">Feature</label>
+        <div class="select is-info pb-3 mb-3">
+          <select class="default_select_2"
+          id="default_select_2"  name="feature"  required>
+              <option value="">Choose a Feature...</option>
+          </select>
+      </div>
+    </div>
+  
+    <button class="button is-link" id="submit">Submit</button>
+  </form>
+
+  <!--Chart with Chart JS-->
+  <div class="chartBox">
+    <div class="card-content">
+      <div class="chartCard">
+        <canvas id="myChart"></canvas>
+      </div>
+    </div>
+  </div>
+  
+
+
+<!-- Ajax/JavaScript-->
+<script type="text/javascript">
+    // This method gets all types and all tables:
+    let types = []
+      $.ajax({
+        url: "/get/types",
+        type: 'GET',
+        dataType: 'json', // added data type
+        success: function(res) {
+            res.forEach(function (value, i){
+                $('select.default_select').append(`<option value=${value}>${value}</option>`);
+            });
+        }
+         });
+    // This method gets all possible features:
+    let features = []
+      $.ajax({
+        url: "/get/features",
+        type: 'GET',
+        dataType: 'json', // added data type
+        success: function(res) {
+            res.forEach(function (value, i){
+                $('select.default_select_2').append(`<option value=${value}>${value}</option>`);
+            });
+        }
+         });
+
+
+    // When two dropdown menus are selected and someone clicks the button, this method sends the data to the server to /post/classification
+    // and then gets the result and displays it in a line chart.
+    let timestamps = []
+    let values = []
+    $('#submit').click(function(e){
+        e.preventDefault();
+        let device = $('#default_select').val();
+        let feature = $('#default_select_2').val();
+        $.ajax({
+            url: "/post/classification",
+            type: 'POST',
+            data: {
+                device: device,
+                feature: feature
+            },
+            dataType: 'json', // added data type
+            success: function(res) {
+                let data = res.data;
+                res.forEach(function (value, i){
+                // Create a new array with the data from the server:
+                timestamps.push(value[0]);
+                values.push(value[1])       
+                });     
+                //add the data to the chart:
+                addData(myChart,timestamps, values)
+              }})
+            });
+
+            // Create a new line chart with the data from y = values (0, 1, 2 or 3) and x = timestamps:
+            const data = {
+                labels: timestamps,
+                datasets: [{
+                label: "Classification",
+                data: values,
+                backgroundColor: [
+                  'rgba(255, 26, 104, 0.2)',
+                  'rgba(54, 162, 235, 0.2)',
+                  'rgba(255, 206, 86, 0.2)',
+                  'rgba(75, 192, 192, 0.2)',
+                  'rgba(153, 102, 255, 0.2)',
+                  'rgba(255, 159, 64, 0.2)',
+                  'rgba(0, 0, 0, 0.2)'
+                ],
+                borderColor: [
+                  'rgba(255, 26, 104, 1)',
+                  'rgba(54, 162, 235, 1)',
+                  'rgba(255, 206, 86, 1)',
+                  'rgba(75, 192, 192, 1)',
+                  'rgba(153, 102, 255, 1)',
+                  'rgba(255, 159, 64, 1)',
+                  'rgba(0, 0, 0, 1)'
+                ],
+                borderWidth: 1
+              }]
+            };
+            // config 
+            const config = {
+              type: 'line',
+              data,
+              options: {
+                scales: {
+                  y: {
+                    beginAtZero: false,
+                    min: 0,
+                    max: 3,
+                    ticks: {
+                      stepSize: 1
+                    }
+                  }
+                }
+              }
+            };
+            // render init block
+const myChart = new Chart(
+  document.getElementById('myChart'),
+  config
+);
+      
+
+function addData(chart, label, data) {
+    chart.data.labels.push(label);
+    chart.data.datasets.forEach((dataset) => {
+        dataset.data.push(data);
+    });
+    chart.update();
+}
+
+function removeData(chart) {
+    chart.data.labels.pop();
+    chart.data.datasets.forEach((dataset) => {
+        dataset.data.pop();
+    });
+    chart.update();
+}
+
+                
+
+
+
+    
+</script>
+{% endblock %}

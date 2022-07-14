@@ -1,12 +1,14 @@
 import os
+from random import shuffle
 import sys
 import time
 import pickle
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 from app.database.dbqueries import dbqueries
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
 
 # Used to ignore annoying tensorflow warnings:
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
@@ -49,35 +51,18 @@ class AnomalyDetector(Model):
         return decoded
 
 class anomalydl:
-    # Classiclass anomalydl:
-    """
-    This class contains the functions for anomaly detection.
-    Uses scikit learn and tensorflow for the anomaly detection with deep learning.
-    In this case uses Autoencoders to do the anomaly detection.
-    """
 
     @staticmethod
-    def find_threshold(model, X_test):
-        """
-        This function finds the threshold for the anomaly detection.
-        :input: model: trained model, X_test: test data
-        :output: threshold: float, train_loss: float
-        """
+    def find_threshold(model, X_test, feature):
+        print("Predict autoencoder..." + feature + str(time.time()))
         reconstruction = model.predict(X_test)
+        print("Predict autoencoder...done" + feature + str(time.time()))
         train_loss = mae(X_test, reconstruction)
         threshold = np.mean(train_loss) + 2*np.std(train_loss)
         return threshold, train_loss
 
     @staticmethod
     def append_labels(train_loss, threshold):
-        """
-        This function takes the reconstruction of the test data and the threshold
-        and returns a list of labels for each sample.
-        If the reconstruction is above the threshold, the sample is considered
-        an anomaly (-1) else it is considered normal (1).
-        :input: reconstruction: the reconstruction of the test data (numpy array) and
-        threshold: the threshold for the anomaly detection (float)
-        """
         y_pred = []
         for i in range(0,len(train_loss)):
             if train_loss[i] < threshold:
@@ -112,105 +97,80 @@ class anomalydl:
 
 
     @staticmethod
-    def validate(df: pd.DataFrame, train_path: str, feature: str, threshold: float):
-        """
-        This function validates the anomaly detection.
-        :input: df: the dataframe with the test data, train_path: the path to the training data,
-        feature: the feature to be used for the anomaly detection, threshold: the threshold for the anomaly detection
-        :output: y_pred: the labels for the test data
-        """
-        # Returned dict:
-        model_list = []
+    def validate(features, training_path, device, db, experiment, behavior):
+        for featurename, corpus in features[2].items():
+            y = [1 for i in range(0,len(corpus))]
+            print("Testing ML: " + featurename)
+            threshhold = dbqueries.get_threshold(db, device, featurename)
+            threshhold = float(threshhold)
+            
+            with open(training_path + '/scalers/' + featurename + '_scaler.pickle', 'rb') as f:
+                scaler = pickle.load(f)
+            
+            # Transform the data:
+            corpus = scaler.transform(corpus)
 
-        # Create a list from the last column of the dataframe
-        # And create a numpy array:
-        X = df[feature].tolist()
-        X = np.array(X)
+            # Load the trained model:
+            with open(training_path + '/models/' + featurename + "autoencoder" + ".pickle", "rb") as f:
+                model = pickle.load(f)
 
-        # Labels y for later use to calculate TPR:
-        y = [1 for i in range(0,len(X))]
-        
-        # Load the trained model:
-        with open(train_path + "/MLmodels/" + feature + "autoencoder.pickle", "rb") as f:
-            model = pickle.load(f)
-        
-        t1 = time.time()
-        reconstruction = model.predict(X)
-        t2 = time.time()
-        loss = mae(X, reconstruction)
-        # Get the y_pred:
-        y_pred = anomalydl.append_labels(loss, threshold)
-
-        # Calculate the TPR:
-        accuracy = accuracy_score(y, y_pred)
-        model_list.append(accuracy)
-        model_list.append(t2-t1)
-
-        return model_list
-
+            reconstruction = model.predict(corpus)
+            loss = mae(corpus, reconstruction)
+            y_pred = anomalydl.append_labels(loss, threshhold)
+            accuracy = accuracy_score(y, y_pred)
+            primary_key = dbqueries.get_foreign_key_dl(db, device, featurename, "autoencoder")
+            dbqueries.create_dl_anomaly_testing(db, device, experiment, behavior, featurename, "autoencoder",accuracy, primary_key)
+        return
 
     @staticmethod
-    def train(df: pd.DataFrame, train_path: str, feature: str) -> dict:
-        """
-        This function trains the model.
-        :input: df: Dataframe, train_path: str, feature: str
-        :output: trained model saved in a pickle file.
-        Threshold = 2std deviations from the mean of the training loss.
-        """
-        # Returned dict:
-        model_dict = {}
-        ml_path = train_path + '/MLmodels/'
-
-        # Checks if the directory exists:
-        if not os.path.exists(ml_path):
-            os.makedirs(ml_path)
+    def train(features, training_path, device, db) -> dict:
         
-        # Create a list from the last column of the dataframe
-        # And create a numpy array:
-        X = df[feature].tolist()
-        X = np.array(X)
+        # Checking all paths:
+        if not os.path.exists(training_path + '/models/'):
+            os.makedirs(training_path + '/models/')
 
-        # Labels y for later use to calculate FPR:
-        y = [0 for i in range(0,len(X))]
-
-        # Create a train-test split:
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=True, random_state=42)
         
+        for featurename, corpus in features[2].items():
+            y = [0 for i in range(0,len(corpus))]
+            print("Training DL: " + featurename)
+            X_train, X_test, y_train, y_test = train_test_split(corpus, y, test_size=0.3, random_state=42, shuffle=False)
 
-        # Get the diffent variables needed to define the Autoencoder:
-        input_dim = X_train.shape[1]
-        layer_one = input_dim - input_dim % 10
-        layer_two = round(layer_one / 2)
-        layer_three = round(layer_two / 2)
-        layer_four = round(layer_three / 2)
-       
-        hidden_layers = [layer_one, layer_two, layer_three, layer_four, layer_three, layer_two, layer_one, input_dim]
-        model_dict['hidden_layers'] = hidden_layers
+            # Load scaler at training_path + '/scalers/' + featurename + '_scaler.pickle'
+            with open(training_path + '/scalers/' + featurename + '_scaler.pickle', "rb") as f:
+                scaler = pickle.load(f)
+            
+            # Scale the data:
+            X_train = scaler.transform(X_train)
+            X_test = scaler.transform(X_test)
 
-        # Create the Autoencoder:
-        model = AnomalyDetector(input_dim, layer_one, layer_two, layer_three, layer_four)
+            # Get the diffent variables needed to define the Autoencoder:
+            input_dim = X_train.shape[1]
+            layer_one = input_dim - input_dim % 10
+            layer_two = round(layer_one / 2)
+            layer_three = round(layer_two / 2)
+            layer_four = round(layer_three / 2)
+            hidden_layers = [layer_one, layer_two, layer_three, layer_four, layer_three, layer_two, layer_one, input_dim]
 
-        # Create callback to stop training if the model does not improve:
-        early_stopping = EarlyStopping(monitor="val_loss", patience=10, mode="min")
-        model.compile(optimizer='adam', loss="mae", metrics=["mae","accuracy"])
-        t1 = time.time()
-        model.fit(X_train, X_train, epochs=500, batch_size=120, shuffle=True, validation_data=(X_val, X_val), callbacks=[early_stopping], verbose=0)
-        t2=time.time()
-        model_dict['training_time'] = t2 - t1
+            model = AnomalyDetector(input_dim, layer_one, layer_two, layer_three, layer_four)
+            early_stopping = EarlyStopping(monitor="val_loss", patience=10, mode="min")
+            model.compile(optimizer='adam', loss="mae", metrics=["mae","accuracy"])
 
-        # Calculate the train loss and threshold:
-        threshold, train_loss = anomalydl.find_threshold(model, X_val)
-        model_dict['threshhold'] = threshold
+            print("Start training autoencoder " + featurename + " " + str(time.time()))
+            model.fit(X_train, X_train, epochs=500, batch_size=120, shuffle=True, validation_data=(X_test, X_test), callbacks=[early_stopping], verbose=0)
+            print("End training autoencoder " + featurename + " " + str(time.time()))
 
-        # Get the y_pred:
-        y_pred = anomalydl.append_labels(train_loss, threshold)
+            threshold, train_loss = anomalydl.find_threshold(model, X_test, featurename)
+            y_pred = anomalydl.append_labels(train_loss, threshold)
+            accuracy = accuracy_score(y_test, y_pred)
 
-        # Calculate the accuracy:
-        accuracy = accuracy_score(y_val, y_pred)
-        model_dict['TNR'] = accuracy
+            # Save the model as a pickle file:
+            with open(training_path + '/models/' + featurename + "autoencoder" + ".pickle", "wb") as f:
+                pickle.dump(model, f)
 
-        # Save the model as a pickle file:
-        with open(ml_path + feature + 'autoencoder.pickle', 'wb') as f:
-            pickle.dump(model, f)
-        
-        return model_dict
+            # DB Query:
+            dbqueries.create_dl_anomaly(db, device, featurename, "autoencoder", accuracy, threshold, str(hidden_layers))
+
+        return
+
+            
+    

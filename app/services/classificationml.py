@@ -6,6 +6,7 @@ import warnings
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import  classification_report
 from sklearn.linear_model import LogisticRegression
 from app.database.dbqueries import dbqueries
@@ -56,45 +57,60 @@ class classification:
 
 
     @staticmethod
-    def train(df:pd.DataFrame, train_path: str, feature: str):
-        """
-        This function trains the data.
-        :input: df: dataframe, train_path: path to train data, feature: feature to train
-        :output: df: dataframe
-        """
-        # List, that will be returned
-        y = df["behavior"]
-        X = df[feature].tolist()
-        X = np.array(X)
+    def train(features, training_path):
 
-        # Create a train-test split:
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=.3, shuffle=True, random_state=42)
+         # Checking all paths:
+        if not os.path.exists(training_path + '/models/'):
+            os.makedirs(training_path + '/models/')
 
-        # Check if the directory exists, if not create it:
-        ml_path = train_path + '/MLmodels/'
-        if not os.path.exists(ml_path):
-            os.makedirs(ml_path)
-        
+        if not os.path.exists(training_path + '/scalers/'):
+            os.makedirs(training_path + '/scalers/')
+
+        if not os.path.exists(training_path + "/Reports/"):
+            os.makedirs(training_path + "/Reports/")
 
         # Classifiers for Multiclass classification:
         clf = LogisticRegression(solver='saga', multi_class='ovr', max_iter=5000) 
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_val)
-    
-        # Get classification report:
-        report = pd.DataFrame(classification_report(y_val, y_pred, output_dict=True)).transpose()
 
-        # Check if outputpath exists, if not create it:
-        output_path = train_path + "/Reports/"
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
+        for featurename, corpus in features[2].items():
+            
+            # Behavioral features:s
+            y = features[1]
+
+            # Create a train-test split:
+            X_train, X_val, y_train, y_val = train_test_split(corpus, y, test_size=.3, shuffle=True, random_state=42)
+
+            # Standardize the data:
+            scaler = StandardScaler()
+            scaler.fit(X_train)
+            X_train = scaler.transform(X_train)
+            X_val = scaler.transform(X_val)
+
+            # Save the scaler:
+            with open(training_path + '/scalers/' + featurename + '_scaler.pickle', 'wb') as f:
+                pickle.dump(scaler, f)
+
+            print("Start training: " + featurename + "LR" + " " + str(time.time()))
+            clf.fit(X_train, y_train)
+            print("End training: " + featurename + "LR" + " " + str(time.time()))
+
+            # Save the model:
+            with open(training_path + '/models/' + featurename + "LR" + ".pickle", "wb") as f:
+                    pickle.dump(clf, f)
+
+            # Evaluate the model:
+            print("Start evaluating: " + featurename + "LR" + " " + str(time.time()))
+            y_pred = clf.predict(X_val)
+            print("End evaluating: " + featurename + "LR" + " " + str(time.time()))
+    
+            # Get classification report:
+            report = pd.DataFrame(classification_report(y_val, y_pred, output_dict=True)).transpose()
+
+
+            # Save the report as a .csv file in the output folder:
+            report.to_csv(training_path + "/Reports/" + featurename + "LR" + '_report.csv')
         
-        # Save the model:
-        with open(ml_path + feature +  "LogisticRegression" + '.pickle', 'wb') as f:
-            pickle.dump(clf, f)            
-        
-        # Save the report as a .csv file in the output folder:
-        report.to_csv(output_path + feature + "LogisticRegression" + '_report.csv')
+        return
 
         
         

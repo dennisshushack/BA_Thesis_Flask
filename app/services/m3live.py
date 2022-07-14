@@ -5,11 +5,9 @@ import pandas as pd
 import numpy as np
 import pickle
 import warnings
-import time
 warnings.simplefilter(action='ignore', category=FutureWarning)
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
-
 
 ##############################################################################################################################
 #                                                   Data Cleaning
@@ -82,177 +80,35 @@ class m3live:
         arry = [outputfile_name, output_path]
         return arry
 
-
 ##############################################################################################################################
-#                                                  Data Standardization
-##############################################################################################################################   
-    @staticmethod
-    def load_scaler(training_path: str, feature:str):
-        """
-        This function loads the scaler from the pickle file.
-        """
-        scaler_path = training_path + "/scalers/" + feature + "_scaler.pickle"
-        with open(scaler_path, 'rb') as f:
-            scaler = pickle.load(f)
-        return scaler
-
-    @staticmethod
-    def standardize(df: pd.DataFrame, training_path: str):
-        """
-        This function standardises the extracted features.
-        input: dataframe: pd.DataFrame, category: str, input_path: str, training_path: str
-        output: dataframe: pd.DataFrame scaled
-        """
-        features = [ 
-        'frequency_1gram', 
-        'tfidf_1gram',
-        'hashingvectorizer_1gram',
-        'sequence_1gram',
-        ]
-
-        feature_normalized_df = {}
-
-        for feature in features:
-            # Create a new dataframe with ids, behavior and the feature:
-            df_feature = pd.DataFrame({'timestamps': df['id'], feature: df[feature]})
-            
-            if feature == 'sequence_1gram' or feature == 'hashingvectorizer_1gram':
-                feature_normalized_df[feature] = df_feature
-                continue
- 
-            # Load the scaler:
-            scaler = m3live.load_scaler(training_path, feature)
-            # Standardise the feature:
-            data = scaler.transform(df_feature[feature].tolist())
-            normaled_df = pd.DataFrame([df_feature['timestamps'].tolist(), data.tolist()]).transpose()
-            normaled_df.columns = ['timestamps', feature]
-            feature_normalized_df[feature] = normaled_df
-            
-        return feature_normalized_df
-
-##############################################################################################################################
-#                                                  Creating and Loading Vectorizers / Dictionarys
+#                                                   Load Vectorizer
 ##############################################################################################################################
     @staticmethod
-    def load_vectorizers(path: str):
-        """
-        This function loads the vectorizers from the pickle file.
-        output: vectorizers: dict
-        """
-        vec_path = path + '/vectorizers/'
-        vectorizers = {}
-        # Can be adjusted:
-        for n in range(1, 2):
-            cvn = f'countvectorizer_ngram_1-{n}'
-            tfn = f'tfidfvectorizer_ngram_1-{n}'
-            hvn = f'hashingvectorizer_ngram_1-{n}'
-            ngd = f'sequence_1gram'
+    def apply_vectorizers(corpus, train, features):
         
-            location = open(f'{vec_path}{cvn}.pickle', 'rb')
-            cv = pickle.load(location)
-            vectorizers[cvn] = cv
-
-            location = open(f'{vec_path}{tfn}.pickle', 'rb')
-            tf = pickle.load(location)
-            vectorizers[tfn] = tf
-
-            location = open(f'{vec_path}{ngd}.pickle', 'rb')
-            hv = pickle.load(location)
-            vectorizers[ngd] = hv
-
-            location = open(f'{vec_path}{hvn}.pickle', 'rb')
-            hv = pickle.load(location)
-            vectorizers[hvn] = hv
-        
-        return vectorizers
-
-    @staticmethod
-    def apply_vectorizer(features: list, corpus_dataframe:list, corpus: list, training_path: str):
-        """
-        This applies the vectorizers and dictionnaries to the corpus.
-        :input: features: list, corpus: list, training_path: str
-        :output: dataframe: pd.DataFrame
-        """
-        vectorizers = m3live.load_vectorizers(training_path)
-        # Can be adjusted
+        corpuses = {}
+        vec_path = train + '/vectorizers/'
         for n in range(1, 2):
-            cvn = f'countvectorizer_ngram_1-{n}'
-            tfn = f'tfidfvectorizer_ngram_1-{n}'
-            hvn = f'hashingvectorizer_ngram_1-{n}'
-            ngd = f'sequence_1gram'
+            cv = pickle.load(open(vec_path + f'CountVectorizer_{n}.pkl', 'rb'))
+            tfidf = pickle.load(open(vec_path + f'TfidfVectorizer_{n}.pkl', 'rb'))
+            hash = pickle.load(open(vec_path + f'HashingVectorizer_{n}.pkl', 'rb'))
+            
+            # Apply the vectorizers:
+            CountVectorizer_corpus = cv.transform(corpus)
+            CountVectorizer_corpus = CountVectorizer_corpus.toarray()
+            corpuses[f'CountVectorizer_{n}'] = CountVectorizer_corpus
 
-            # CountVectorizer:
-            cv = vectorizers[cvn]
-            # TfidfVectorizer:
-            tf = vectorizers[tfn]
-            # HashingVectorizer:
-            hv = vectorizers[hvn]
-            # Sequence
-            ngd = vectorizers[ngd]
+            TfidfVectorizer_corpus = tfidf.transform(corpus)
+            TfidfVectorizer_corpus = TfidfVectorizer_corpus.toarray()
+            corpuses[f'TfidfVectorizer_{n}'] = TfidfVectorizer_corpus
 
-            # CountVectorizer:
-            cv_features = cv.transform(corpus)
-            cv_features = cv_features.toarray()
+            HashingVectorizer_corpus = hash.transform(corpus)
+            HashingVectorizer_corpus = HashingVectorizer_corpus.toarray()
+            corpuses[f'HashingVectorizer_{n}'] = HashingVectorizer_corpus
 
-            # TfidfVectorizer:
-            tf_features = tf.transform(corpus)
-            tf_features = tf_features.toarray()
-
-            # HashingVectorizer:
-            hv_features = hv.transform(corpus)
-            hv_features = hv_features.toarray()
-
-            # Dict Sequence:
-            dict_sequence_features = []
-            for trace in corpus_dataframe:
-                syscall_trace = m3live.replace_with_unk(trace['syscall'].to_list(), ngd)
-                dict_sequence = m3live.get_dict_sequence(syscall_trace, ngd)
-                # Only take the first 100 elements of the dict_sequence:
-                dict_sequence = dict_sequence[:1000]
-                dict_sequence_features.append(dict_sequence)
-            dict_sequence_features = np.array(dict_sequence_features)
-
-            # Append frequency features:
-            features.append(cv_features)
-            # Append tfidf features:
-            features.append(tf_features)
-            # Append hashing features:
-            features.append(hv_features)
-             # Append hashing features:
-            features.append(dict_sequence_features)
-
-        encoded_trace_df = pd.DataFrame(features).transpose()
-        encoded_trace_df.columns = ['id', 'frequency_1gram', 'tfidf_1gram', 'hashingvectorizer_1gram', 'sequence_1gram']
-        return encoded_trace_df
-
-
-
-##############################################################################################################################
-#                                                  Syscall sequence functions
-##############################################################################################################################
-    @staticmethod
-    def replace_with_unk(syscall_trace, syscall_dict):
-        """
-        Replaces all values in the systemcall trace with 
-        unique, if they do not appear in the systemcall dict.
-        """
-        for i, sc in enumerate(syscall_trace):
-            if sc.lower() not in syscall_dict:
-                syscall_trace[i] = 'unk'
-        return syscall_trace
-    
-    @staticmethod
-    def get_dict_sequence(trace,term_dict):
-        """
-        Gets the actual sequence of systemcalls
-        """
-        dict_sequence = []
-        for syscall in trace:
-            if syscall in term_dict:
-                dict_sequence.append(term_dict[syscall])
-            else:
-                dict_sequence.append(term_dict['unk'])
-        return dict_sequence
+        # Return the features:
+        features.append(corpuses)
+        return features
 
 
 ##############################################################################################################################
@@ -289,35 +145,15 @@ class m3live:
 #                                                  Main function
 ###############################################################################################################################
     @staticmethod
-    def preprocess_data(input_dirs: dict, training_dirs: list, number:int):
-        # Get the value of the first element of the dictionary:
-        try:
-            start_time_monitor3 = time.time()
-            print(f"Preprocessing data for monitor 3...{start_time_monitor3}")
-            input_dirs = list(input_dirs.values())[0]
-            list_of_return_dict = []
-            arry= m3live.clean_data(input_dirs,number)
-            file_name = arry[0]
-            file_path = arry[1]
-            features_anomaly = []
-            features_classification = []
-            file_ids = [file_name]
-            features_anomaly.append(file_ids)
-            features_classification.append(file_ids)
-            corpus_dataframe ,corpus = m3live.get_corpus(file_path)
-            # For anomaly detection & classification:
-            print("Applying vectorizer to the anomaly detection & classification features...")
-            df_anomaly = m3live.apply_vectorizer(features_anomaly, corpus_dataframe, corpus, training_dirs[0])
-            df_classification = m3live.apply_vectorizer(features_classification, corpus_dataframe, corpus, training_dirs[1])
-            print("Standardizing the features...")
-            dict_df_anomaly = m3live.standardize(df_anomaly, training_dirs[0])
-            dict_df_classification = m3live.standardize(df_classification, training_dirs[1])
-            list_of_return_dict.append(dict_df_anomaly)
-            list_of_return_dict.append(dict_df_classification)
-            end_time_monitor3 = time.time()
-            print(f"Preprocessing data for monitor 3...Done! {end_time_monitor3}")
-            print(f"Time taken to preprocess the data for monitor 3: {end_time_monitor3 - start_time_monitor3}")
-            return list_of_return_dict
-        except:
-            return None
-        
+    def preprocess_data(input_dirs: dict,  number:int, training_dir: str):
+        features = []
+        arry= m3live.clean_data(input_dirs,number)
+        file_name = arry[0]
+        file_path = arry[1]
+        features.append([file_name])
+        corpus_dataframe ,corpus = m3live.get_corpus(file_path)
+        return m3live.apply_vectorizers(corpus, training_dir, features)
+
+
+
+            

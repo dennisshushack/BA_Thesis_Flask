@@ -66,7 +66,7 @@ class dbqueries:
         return location[0]
     
     @staticmethod
-    def create_ml_anomaly(db_connection, device, feature, model, TNR, train_time):
+    def insert_into_anomaly_detection(db_connection, device, feature, model, TNR):
         """
         Creates a new entry in the ml_dl_anomaly table.
         :input: db_connection: database connection, device: device that made the request, feature: 
@@ -75,9 +75,9 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO ML_Training_Anomaly (device, feature, model, TNR, train_time)
-            VALUES (?, ?, ?, ?, ?)
-        """, (device, feature, model, TNR, train_time))
+            INSERT INTO ML_Training_Anomaly (device, feature, model, TNR)
+            VALUES (?, ?, ?, ?)
+        """, (device, feature, model, TNR))
         db_connection.commit()
         cursor.close()
 
@@ -101,7 +101,7 @@ class dbqueries:
         return id[0]
   
     @staticmethod
-    def create_ml_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, test_time, pk_id):
+    def create_ml_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, pk_id):
         """
         Creates a new entry in the ml_dl_anomaly_testing table.
         :input: db_connection: database
@@ -111,15 +111,15 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO ML_Testing_Anomaly (trainings_id, device, experiment, ransomware, feature, model, TPR, test_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (pk_id, device, experiment, ransomware, feature, model, TPR, test_time))
+            INSERT INTO ML_Testing_Anomaly (trainings_id, device, experiment, ransomware, feature, model, TPR)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (pk_id, device, experiment, ransomware, feature, model, TPR))
         db_connection.commit()
         cursor.close()
 
 
     @staticmethod
-    def create_dl_anomaly(db_connection, device, feature, model, TNR, train_time, threshold, neurons):
+    def create_dl_anomaly(db_connection, device, feature, model, TNR, threshold, neurons):
         """
         Creates a new entry in the dl_anomaly table.
         :input: db_connection: database
@@ -129,9 +129,9 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO DL_Training_Anomaly (device, feature, model, threshhold, neurons, TNR, train_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (device, feature, model, threshold, neurons, TNR, train_time))
+            INSERT INTO DL_Training_Anomaly (device, feature, model, threshhold, neurons, TNR)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (device, feature, model, threshold, neurons, TNR))
         db_connection.commit()
         cursor.close()
     
@@ -174,7 +174,7 @@ class dbqueries:
         return id[0]
         
     @staticmethod
-    def create_dl_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, test_time, pk_id):
+    def create_dl_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, pk_id):
         """
         Creates a new entry in the dl_anomaly_testing table.
         :input: db_connection: database
@@ -184,9 +184,9 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO DL_Testing_Anomaly (trainings_id, device, experiment, ransomware, feature, model, TPR, test_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (pk_id, device, experiment, ransomware, feature, model, TPR, test_time))
+            INSERT INTO DL_Testing_Anomaly (trainings_id, device, experiment, ransomware, feature, model, TPR)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (pk_id, device, experiment, ransomware, feature, model, TPR))
         db_connection.commit()
         cursor.close()
         
@@ -215,8 +215,9 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            SELECT id, time_stamp, anomaly_class FROM live_anomaly
+            SELECT time_stamp, anomaly_class FROM live_anomaly
             WHERE device = ? AND algo = ? AND feature = ?
+            ORDER BY id DESC
         """, (device, algo, feature))
         anomaly_class = cursor.fetchall()
         cursor.close()
@@ -224,7 +225,40 @@ class dbqueries:
             return None
         return anomaly_class
 
+    @staticmethod
+    def get_devices(db_connection):
+        """
+        Gets all the devices from the database.
+        :input: db_connection: database connection
+        :return: all the devices
+        """
+        cursor = db_connection.cursor()
+        cursor.execute("""
+            SELECT DISTINCT device FROM live_anomaly
+        """)
+        devices = cursor.fetchall()
+        cursor.close()
+        if devices is None:
+            return None
+        return devices
 
-            
+
+    @staticmethod
+    def get_features(db_connection):
+        """
+        Gets all the devices from the database.
+        :input: db_connection: database connection
+        :return: all the devices
+        """
+        cursor = db_connection.cursor()
+        cursor.execute("""
+            SELECT DISTINCT feature FROM live_anomaly
+        """)
+        devices = cursor.fetchall()
+        cursor.close()
+        if devices is None:
+            return None
+        return devices
+     
 
         

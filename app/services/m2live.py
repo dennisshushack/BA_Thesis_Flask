@@ -13,9 +13,11 @@ if not sys.warnoptions:
 
 # Specially made for live monitoring:
 class m2live:
+
     @staticmethod
-    def clean_data(input_dirs: dict, number:int) -> pd.DataFrame:
-        # Cleans the data for monitor 1:
+    def preprocess_data(input_dirs: dict, number:int) -> pd.DataFrame:
+        # Does data preprocessing for monitor 1: (anomaly & classification)
+        features = []
         df = pd.DataFrame()
         timestamps = []
         for key, value in input_dirs.items():
@@ -30,55 +32,21 @@ class m2live:
                 file_df.drop('time', axis=1, inplace=True)
                 file_df.drop('seconds',axis=1, inplace=True)
                 file_df.drop('connectivity',axis=1, inplace=True)
-                # Append the dataframe to the dataframe df
+
+                # Feature engineering:
+                 # Feature engineering:
+                file_df.drop('cs', axis=1, inplace=True)
+                file_df.drop('raw_syscalls:sys_enter', axis=1, inplace=True)
+                file_df.drop('raw_syscalls:sys_exit', axis=1, inplace=True)
+                file_df.drop('sched:sched_switch', axis=1, inplace=True)
+                file_df.drop('sched:sched_wakeup', axis=1, inplace=True)
                 df = df.append(file_df) 
+
         # Sort columns of df by alphabetical order:
         df = df.reindex(sorted(df.columns), axis=1)
-        return df, timestamps
+        features.append(timestamps)
+        m2 = {"m2": df}
+        features.append(m2)
+        return features
 
-    @staticmethod
-    def load_scaler_and_standardize(df:pd.DataFrame, training_dir: str):
-        """
-        Loads the scaler and standardizes the dataframe
-        """
-        # Load the scaler from the training directory:
-        with open(training_dir + "/scalers/m2_scaler.pickle", 'rb') as f:
-            scaler = pickle.load(f)
-        # Standardize the dataframe:
-        standardized_df_numpy = scaler.transform(df)
-        return standardized_df_numpy
-
-    @staticmethod
-    def preprocess_data(input_dirs: dict, training_dirs: list, number:int) -> pd.DataFrame:
-        # Does data preprocessing for monitor 1: (anomaly & classification)
-        try:
-            start_time = time.time()
-            print(f"Preprocessing data for monitor 2... {start_time}")
-            return_dfs = []
-            df, timestamps = m2live.clean_data(input_dirs, number)
-            print("Standardizing data...")
-            m2live_standardized_anomaly = m2live.load_scaler_and_standardize(df, training_dirs[0])
-            m2live_standardized_classification = m2live.load_scaler_and_standardize(df, training_dirs[1])
-
-            features_anomaly = []
-            features_classification = []
-            features_anomaly.append(timestamps)
-            features_classification.append(timestamps)
-            features_anomaly.append(m2live_standardized_anomaly)
-            features_classification.append(m2live_standardized_classification)
-
-            m2_preprocessed_anomaly = pd.DataFrame(features_anomaly).transpose()
-            m2_preprocessed_classification = pd.DataFrame(features_classification).transpose()
-            m2_preprocessed_anomaly.columns = ["timestamps", "m2"]
-            m2_preprocessed_classification.columns = ["timestamps", "m2"]
-
-            return_dfs.append(m2_preprocessed_anomaly)
-            return_dfs.append(m2_preprocessed_classification)
-            end_time = time.time()
-            print(f"Preprocessing data for monitor 2... Done! {end_time}")
-            time_taken = end_time - start_time
-            print(f"Time taken to preprocess data for monitor 2: {time_taken}")
-            return return_dfs
-        except:
-            return None
 
