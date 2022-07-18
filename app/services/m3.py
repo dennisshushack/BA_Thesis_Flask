@@ -127,6 +127,8 @@ class m3:
 ##############################################################################################################################
     @staticmethod
     def apply_vectorizers(corpus, train, features):
+
+        # Create a pre
         
         corpuses = {}
         vec_path = train + '/vectorizers/'

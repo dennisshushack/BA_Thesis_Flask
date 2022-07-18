@@ -34,12 +34,14 @@ class m2live:
                 file_df.drop('connectivity',axis=1, inplace=True)
 
                 # Feature engineering:
-                 # Feature engineering:
-                file_df.drop('cs', axis=1, inplace=True)
                 file_df.drop('raw_syscalls:sys_enter', axis=1, inplace=True)
                 file_df.drop('raw_syscalls:sys_exit', axis=1, inplace=True)
                 file_df.drop('sched:sched_switch', axis=1, inplace=True)
                 file_df.drop('sched:sched_wakeup', axis=1, inplace=True)
+                file_df.drop('irq:irq_handler_entry', axis=1, inplace=True)
+                file_df.drop('preemptirq:irq_enable', axis=1, inplace=True)
+                file_df.drop('timer:hrtimer_start', axis=1, inplace=True)
+                file_df.drop('random:mix_pool_bytes_nolock', axis=1, inplace=True)
                 df = df.append(file_df) 
 
         # Sort columns of df by alphabetical order:

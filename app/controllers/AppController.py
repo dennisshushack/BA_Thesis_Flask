@@ -194,9 +194,6 @@ def background_live_thread(data:json):
     for feature, dataframe in preprocessed_classification.items():
         classification.validate_live(dataframe, training_paths[1], feature, db, device)
 
-
-
-
     
 ################################# Endpoints #####################################
 
@@ -242,6 +239,8 @@ def live():
 
     # Gets the data from the request:
     data = request.get_json()
+    threading.Thread(target=background_live_thread, args=(data,)).start()
+    return jsonify({"status": "ok", "message": "started"})
 
     
 
