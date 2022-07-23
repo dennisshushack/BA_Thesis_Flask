@@ -9,6 +9,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import  classification_report
 from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
 from app.database.dbqueries import dbqueries
 
 
@@ -69,8 +72,16 @@ class classification:
         if not os.path.exists(training_path + "/Reports/"):
             os.makedirs(training_path + "/Reports/")
 
-        # Classifiers for Multiclass classification:
-        clf = LogisticRegression(solver='saga', multi_class='ovr', max_iter=5000) 
+        if not os.path.exists(training_path + "/preprocessed/"):
+            os.makedirs(training_path + "/preprocessed/")
+
+
+        classifiers = {
+            'LogisticRegression': LogisticRegression(solver='saga', multi_class='ovr', max_iter=5000),
+            'DecisionTreeClassifier': DecisionTreeClassifier(),
+            'SVC': SVC(gamma='auto', kernel='rbf'),
+            'RandomForestClassifier': RandomForestClassifier()
+        }
 
         for featurename, corpus in features[2].items():
             
@@ -85,31 +96,33 @@ class classification:
             scaler.fit(X_train)
             X_train = scaler.transform(X_train)
             X_val = scaler.transform(X_val)
+            corpus = scaler.transform(corpus)
 
             # Save the scaler:
             with open(training_path + '/scalers/' + featurename + '_scaler.pickle', 'wb') as f:
                 pickle.dump(scaler, f)
+            
+            # Create a datatframe:
+            timestamp = features[0]
+            behavior = features[1]
+            normaled_df = pd.DataFrame([timestamp, behavior, corpus.tolist()]).transpose()
+            normaled_df.columns = ['timestamp', 'behavior', featurename]
+            # Save the dataframe:
+            normaled_df.to_csv(training_path + '/preprocessed/' + featurename + '_preprocessed.csv', index=False)
 
-            print("Start training: " + featurename + "LR" + " " + str(time.time()))
-            clf.fit(X_train, y_train)
-            print("End training: " + featurename + "LR" + " " + str(time.time()))
-
-            # Save the model:
-            with open(training_path + '/models/' + featurename + "LR" + ".pickle", "wb") as f:
+            # Train the models:
+            for name, clf in classifiers.items():
+                clf.fit(X_train, y_train)
+                # Save the model:
+                with open(training_path + '/models/' + featurename + '_' + name + '.pickle', 'wb') as f:
                     pickle.dump(clf, f)
 
-            # Evaluate the model:
-            print("Start evaluating: " + featurename + "LR" + " " + str(time.time()))
-            y_pred = clf.predict(X_val)
-            print("End evaluating: " + featurename + "LR" + " " + str(time.time()))
-    
-            # Get classification report:
-            report = pd.DataFrame(classification_report(y_val, y_pred, output_dict=True)).transpose()
+                # Evaluate the model:
+                y_pred = clf.predict(X_val)
+                print(classification_report(y_val, y_pred))
+                with open(training_path + '/Reports/' + featurename + '_' + name + '_report.txt', 'w') as f:
+                    f.write(classification_report(y_val, y_pred))
 
-
-            # Save the report as a .csv file in the output folder:
-            report.to_csv(training_path + "/Reports/" + featurename + "LR" + '_report.csv')
-        
         return
 
         

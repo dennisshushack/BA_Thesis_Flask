@@ -5,10 +5,9 @@ import pandas as pd
 import numpy as np
 import pickle
 import warnings
+import time
+import csv
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer, HashingVectorizer
-warnings.simplefilter(action='ignore', category=FutureWarning)
-if not sys.warnoptions:
-    warnings.simplefilter("ignore")
 
 ##############################################################################################################################
 #                                                   Data Cleaning                                                         # 
@@ -90,33 +89,73 @@ class m3:
 
         # Creating n-gram 1 and 2:    
         for n in range(1, 2):
+            print("Creating n-grams of length {}".format(n))
+            start_create_cv = time.time()
+            print("Create CountVectorizer")
             cv = CountVectorizer(ngram_range=(1,n)).fit(corpus)
+            end_create_cv = time.time()
             vocabulary = cv.vocabulary_
-            tfidf = TfidfVectorizer(ngram_range=(1, n)).fit(corpus)
-            hash = HashingVectorizer(ngram_range=(1, n), n_features=len(vocabulary)).fit(corpus)
-        
+            print("Create TfidfVectorizer")
+            start_create_tfidf = time.time()
+            tfidf = TfidfVectorizer(ngram_range=(1, n), vocabulary=vocabulary).fit(corpus)
+            end_create_tfidf = time.time()
+            start_create_hv = time.time()
+            print("Create HashingVectorizer")
+            hash = HashingVectorizer(n_features=2**10, norm='l2', ngram_range=(1, n)).fit(corpus)
+            end_create_hv = time.time()
+
             # Saving the vectorizers:
             vec_path = train + '/vectorizers/'
             if not os.path.exists(vec_path):
                 os.makedirs(vec_path)
 
+            # Pickle file for transforming the corpus into a vector:
             pickle.dump(cv, open(vec_path + f'CountVectorizer_{n}.pkl', 'wb'))
             pickle.dump(tfidf, open(vec_path + f'TfidfVectorizer_{n}.pkl', 'wb'))
             pickle.dump(hash, open(vec_path + f'HashingVectorizer_{n}.pkl', 'wb'))
 
-            # Apply the vectorizers:
-            CountVectorizer_corpus = cv.transform(corpus)
-            CountVectorizer_corpus = CountVectorizer_corpus.toarray()
-            corpuses[f'CountVectorizer_{n}'] = CountVectorizer_corpus
 
-            TfidfVectorizer_corpus = tfidf.transform(corpus)
-            TfidfVectorizer_corpus = TfidfVectorizer_corpus.toarray()
-            corpuses[f'TfidfVectorizer_{n}'] = TfidfVectorizer_corpus
-
-            HashingVectorizer_corpus = hash.transform(corpus)
-            HashingVectorizer_corpus = HashingVectorizer_corpus.toarray()
+            start_apply_hv = time.time()
+            print("Applying HashingVectorizer...")
+            HashingVectorizer_corpus = hash.transform(corpus).toarray()
+            print("We got here")
+            end_apply_hv = time.time()
             corpuses[f'HashingVectorizer_{n}'] = HashingVectorizer_corpus
+            del HashingVectorizer_corpus
 
+
+            # Apply the vectorizers:
+            start_apply_cv = time.time()
+            print("Applying CountVectorizer...")
+            CountVectorizer_corpus = cv.transform(corpus).toarray()
+            end_apply_cv = time.time()
+            corpuses[f'CountVectorizer_{n}'] = CountVectorizer_corpus
+            del CountVectorizer_corpus
+
+            start_apply_tfidf = time.time()
+            print("Applying TfidfVectorizer...")
+            TfidfVectorizer_corpus = tfidf.transform(corpus).toarray()
+            end_apply_tfidf = time.time()
+            corpuses[f'TfidfVectorizer_{n}'] = TfidfVectorizer_corpus
+            del TfidfVectorizer_corpus
+
+            print("Finished with all!")
+
+            # Delete the corpus:
+            del corpus
+        
+
+            # Save metrics in .csv:
+            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+                fieldnames = ['Name', 'Start', 'End', 'Duration']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writerow({'Name': f'Creating CountVectorizer_{n}', 'Start': start_create_cv, 'End': end_create_cv, 'Duration': end_create_cv - start_create_cv})
+                writer.writerow({'Name': f'Applying CountVectorizer_{n}', 'Start': start_apply_cv, 'End': end_apply_cv, 'Duration': end_apply_cv - start_apply_cv})
+                writer.writerow({'Name': f'Creating TfidfVectorizer_{n}', 'Start': start_create_tfidf, 'End': end_create_tfidf, 'Duration': end_create_tfidf - start_create_tfidf})
+                writer.writerow({'Name': f'Applying TfidfVectorizer_{n}', 'Start': start_apply_tfidf, 'End': end_apply_tfidf, 'Duration': end_apply_tfidf - start_apply_tfidf})
+                writer.writerow({'Name': f'Creating HashingVectorizer_{n}', 'Start': start_create_hv, 'End': end_create_hv, 'Duration': end_create_hv - start_create_hv})
+                writer.writerow({'Name': f'Applying HashingVectorizer_{n}', 'Start': start_apply_hv, 'End': end_apply_hv, 'Duration': end_apply_hv - start_apply_hv})
+                csvfile.close()    
 
         # Return the features:
         features.append(corpuses)
@@ -127,10 +166,8 @@ class m3:
 ##############################################################################################################################
     @staticmethod
     def apply_vectorizers(corpus, train, features):
-
-        # Create a pre
-        
         corpuses = {}
+        print("Applying vectorizers...")
         vec_path = train + '/vectorizers/'
         for n in range(1, 2):
             cv = pickle.load(open(vec_path + f'CountVectorizer_{n}.pkl', 'rb'))
@@ -176,7 +213,7 @@ class m3:
         This function creates a corpus (list) of all the systemcalls in the files.
         :input: path: str, files: list :output: corpus: list i.e [syscall1 sycall2 syscall3, syscall4 ...]
         """
-        corpus_dataframe, corpus = [], []
+        corpus = []
         for file in files:
             if '.csv' in file:
                 file_path = path + "/" + file
@@ -184,11 +221,10 @@ class m3:
                     trace = pd.read_csv(file_path)
                 except:
                     continue
-                corpus_dataframe.append(trace)
                 tr = trace['syscall'].tolist()
                 longstr = m3.from_list_to_str(tr)
                 corpus.append(longstr)
-        return corpus_dataframe, corpus
+        return corpus
     
     ###############################################################################################################################
     #                                                  Main function
@@ -206,7 +242,7 @@ class m3:
         print("Creating the corpus...")
         features = []
         file_ids, behaviors = [], []
-        corpus_dataframe, corpus = [], []
+        corpus = []
 
         for key, value in input_dirs.items():
             input_dir = value + "/m3"
@@ -219,15 +255,11 @@ class m3:
                 if '.csv' in file:
                     file_ids_sub.append(int(file.replace('.csv', '')))
                     behaviors_sub.append(behavior)
-            corpus_dataframe_subdirectory ,corpus_subdirectory = m3.get_corpus(input_dir, files)
-            # Append dataframes:
-            corpus_dataframe.extend(corpus_dataframe_subdirectory)
-            # Extend the corpus:
+            corpus_subdirectory = m3.get_corpus(input_dir, files)
             corpus.extend(corpus_subdirectory)
-            # Extend the file_ids:
             file_ids.extend(file_ids_sub)
-            # Extend the behaviors:
             behaviors.extend(behaviors_sub)
+            del file_ids_sub, behaviors_sub, corpus_subdirectory
         
         # Here we have the timestamps and behaviors:
         features.append(file_ids)

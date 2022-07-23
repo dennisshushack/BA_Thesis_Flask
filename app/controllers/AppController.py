@@ -1,7 +1,7 @@
 import json
 import os
-from unicodedata import category 
 from flask import Blueprint
+import csv
 import threading
 import sqlite3
 import time
@@ -53,15 +53,42 @@ def identify_subdirectories(path: str)-> dict:
 def preprocess_data(monitors:list , subdirectories: dict, training_paths: list, category: str) -> list:
     preprocessed_data = []
     for monitor in monitors:
+
+        # Preprocessing monitor 1:
         if monitor == "m1":
+            start_monitor_1 = time.time()
             list_m1 = m1.preprocess_data(subdirectories)
+            end_monitor_1 = time.time()
+            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+                fieldnames = ['Name', 'Start', 'End', 'Duration']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writerow({'Name': 'Preprocess Monitor Timucin', 'Start': float(start_monitor_1), 'End': float(end_monitor_1), 'Duration': float(end_monitor_1 - start_monitor_1)})
+                csvfile.close()    
             preprocessed_data.append(list_m1)
+
         elif monitor == "m2":
+            start_monitor_2 = time.time()
             list_m2 = m2.preprocess_data(subdirectories)
+            end_monitor_2 = time.time()
+            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+                fieldnames = ['Name', 'Start', 'End', 'Duration']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writerow({'Name': 'Preprocess Monitor Huertas', 'Start': float(start_monitor_2), 'End': float(end_monitor_2), 'Duration': float(end_monitor_2 - start_monitor_2)})
+                csvfile.close()
             preprocessed_data.append(list_m2)
+
         else:
+            start_monitor_3 = time.time()
             list_m3 = m3.preprocess_data(subdirectories, category, training_paths)
+            end_monitor_3 = time.time()
+            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+                fieldnames = ['Name', 'Start', 'End', 'Duration']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writerow({'Name': 'Preprocess Monitor Systemcalls', 'Start': float(start_monitor_3), 'End': float(end_monitor_3), 'Duration': float(end_monitor_3 - start_monitor_3)})
+                csvfile.close()
             preprocessed_data.append(list_m3)
+
+
     return preprocessed_data
             
 def train_anomaly_detection(db: sqlite3.Connection, device: str, preprocessed_data: dict, training_path: str):
@@ -71,9 +98,9 @@ def train_anomaly_detection(db: sqlite3.Connection, device: str, preprocessed_da
         anomalydl.train(feature, training_path, device, db)
     return "Done"
 
-def test_anomaly_detection(db: sqlite3.Connection, device: str, preprocessed_data: dict, training_path: str, experiment: str, behavior: str):
+def test_anomaly_detection(db: sqlite3.Connection, device: str, preprocessed_data: dict, training_path: str, experiment: str, behavior: str, path: str):
     for feature in preprocessed_data:
-        anomalyml.validate(feature, training_path, device, db, experiment, behavior)
+        anomalyml.validate(feature, training_path, device, db, experiment, behavior, path)
         anomalydl.validate(feature, training_path, device, db, experiment, behavior)
     return "Done"
 
@@ -103,6 +130,19 @@ def background_training(data: json):
         category = data['category']
         behavior = data['behavior']
 
+
+        # Creates a .csv if the category is training:
+        if category == "training":
+            with open('output.csv', 'w', newline='') as csvfile:
+                # Use the name: Name, start and end as columns
+                fieldnames = ['Name', 'Start', 'End', 'Duration']
+                # Create a writer object
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                # Write the header
+                writer.writeheader()
+                # Close the file
+                csvfile.close()
+
         # The testing folder contains experiment subdirectries:
         if category == "testing":
             path = path + '/' + experiment
@@ -122,7 +162,7 @@ def background_training(data: json):
             
         # Only for Anomaly detection testing:
         if ml_type == "anomaly" and category == "testing":
-            test_anomaly_detection(db, device, preprocessed_data, training_paths[0], experiment, behavior)
+            test_anomaly_detection(db, device, preprocessed_data, training_paths[0], experiment, behavior, path)
 
         # Only for Classification training:
         if ml_type == 'classification' and category == 'training':
@@ -149,7 +189,6 @@ def background_live_thread(data:json):
     subdirectories = identify_subdirectories(path)
     
     # Preprocess the data:
-   
     for monitor in monitors:
         if monitor == "m1":
             return_dfs = m1live.preprocess_data(subdirectories, training_paths, number)
@@ -168,7 +207,6 @@ def background_live_thread(data:json):
         elif monitor == "m3":
             list_of_return_dict = m3live.preprocess_data(subdirectories, training_paths, number)
             if list_of_return_dict == None:
-                print(list_of_return_dict)
                 continue
             anomaly_dict = list_of_return_dict[0]
             for name, df in anomaly_dict.items():
@@ -179,14 +217,12 @@ def background_live_thread(data:json):
  
     
     # Evaluate anomaly detection ML:
-    start_time_anomaly = time.time()
     for feature, dataframe in preprocessed_anomaly.items():
         anomalyml.validate_live(dataframe, training_paths[0], feature, db, device)
     
     # Evaluate anomaly detection DL:
     for feature, dataframe in preprocessed_anomaly.items():
         threshhold = dbqueries.get_threshold(db, device, feature)
-        print(threshhold)
         threshhold = float(threshhold)
         anomalydl.validate_live(dataframe, training_paths[0], feature, db, device, threshhold)
         
@@ -220,7 +256,8 @@ def training():
     data = request.get_json()
 
     # Start the background job (prevents the server from being blocked by a request):
-    threading.Thread(target=background_training, args=(data,)).start()
+    #threading.Thread(target=background_training, args=(data,)).start()
+    background_training(data)
     return jsonify({"status": "ok", "message": "started"})
 
 

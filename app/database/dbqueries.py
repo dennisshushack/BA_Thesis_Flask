@@ -66,7 +66,7 @@ class dbqueries:
         return location[0]
     
     @staticmethod
-    def insert_into_anomaly_detection(db_connection, device, feature, model, TNR):
+    def insert_into_anomaly_detection(db_connection, device, feature, model, TNR, train_time, test_time):
         """
         Creates a new entry in the ml_dl_anomaly table.
         :input: db_connection: database connection, device: device that made the request, feature: 
@@ -75,9 +75,9 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO ML_Training_Anomaly (device, feature, model, TNR)
-            VALUES (?, ?, ?, ?)
-        """, (device, feature, model, TNR))
+            INSERT INTO ML_Training_Anomaly (device, feature, model, TNR, train_time, test_time)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (device, feature, model, TNR, train_time, test_time))
         db_connection.commit()
         cursor.close()
 
@@ -119,7 +119,7 @@ class dbqueries:
 
 
     @staticmethod
-    def create_dl_anomaly(db_connection, device, feature, model, TNR, threshold, neurons):
+    def create_dl_anomaly(db_connection, device, feature, model, TNR_STD, TNR_IQR, STD_lower, STD_upper,  IQR_lower, IQR_upper, neurons, train_time, test_time):
         """
         Creates a new entry in the dl_anomaly table.
         :input: db_connection: database
@@ -129,9 +129,9 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO DL_Training_Anomaly (device, feature, model, threshhold, neurons, TNR)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (device, feature, model, threshold, neurons, TNR))
+            INSERT INTO DL_Training_Anomaly (device, feature, model, STD_lower, STD_upper, IQR_lower, IQR_upper, neurons, TNR_STD, TNR_IQR, train_time, test_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (device, feature, model, STD_lower, STD_upper, IQR_lower, IQR_upper, neurons, TNR_STD, TNR_IQR, train_time, test_time))
         db_connection.commit()
         cursor.close()
     
@@ -145,14 +145,13 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            SELECT threshhold FROM DL_Training_Anomaly
+            SELECT STD_lower, STD_upper, IQR_lower, IQR_upper FROM DL_Training_Anomaly
             WHERE device = ? AND feature = ?
         """, (device, feature))
-        threshold = cursor.fetchone()
+        output = cursor.fetchall()
+        print(output)
         cursor.close()
-        if threshold is None:
-            return None
-        return threshold[0]
+        return output
 
     @staticmethod
     def get_foreign_key_dl(db_connection, device, feature, model):
@@ -174,7 +173,7 @@ class dbqueries:
         return id[0]
         
     @staticmethod
-    def create_dl_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR, pk_id):
+    def create_dl_anomaly_testing(db_connection, device, experiment, ransomware, feature, model, TPR_STD, TPR_IQR, pk_id):
         """
         Creates a new entry in the dl_anomaly_testing table.
         :input: db_connection: database
@@ -184,9 +183,9 @@ class dbqueries:
         """
         cursor = db_connection.cursor()
         cursor.execute("""
-            INSERT INTO DL_Testing_Anomaly (trainings_id, device, experiment, ransomware, feature, model, TPR)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (pk_id, device, experiment, ransomware, feature, model, TPR))
+            INSERT INTO DL_Testing_Anomaly (trainings_id, device, experiment, ransomware, feature, model, TPR_STD, TPR_IQR)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (pk_id, device, experiment, ransomware, feature, model, TPR_STD, TPR_IQR))
         db_connection.commit()
         cursor.close()
         

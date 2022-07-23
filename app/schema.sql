@@ -20,7 +20,9 @@ CREATE TABLE ML_Training_Anomaly(
   device TEXT NOT NULL,
   feature TEXT NOT NULL,
   model TEXT NOT NULL,
-  TNR FLOAT NOT NULL
+  TNR FLOAT NOT NULL,
+  train_time FLOAT NOT NULL,
+  test_time FLOAT NOT NULL
 );
 
 /* Table for testing AD */
@@ -43,9 +45,15 @@ CREATE TABLE DL_Training_Anomaly(
   device TEXT NOT NULL,
   feature TEXT NOT NULL,
   model TEXT NOT NULL,
-  threshhold FLOAT NOT NULL,
+  STD_lower FLOAT NOT NULL,
+  STD_upper FLOAT NOT NULL,
+  IQR_lower FLOAT NOT NULL,
+  IQR_upper FLOAT NOT NULL,
   neurons TEXT NOT NULL,
-  TNR FLOAT NOT NULL
+  TNR_STD FLOAT NOT NULL,
+  TNR_IQR FLOAT NOT NULL,
+  train_time FLOAT NOT NULL,
+  test_time FLOAT NOT NULL
 );
 
 /* Table for testing DL AD */
@@ -57,7 +65,8 @@ CREATE TABLE DL_Testing_Anomaly(
   ransomware TEXT NOT NULL,
   feature TEXT NOT NULL,
   model TEXT NOT NULL,
-  TPR FLOAT NOT NULL,
+  TPR_STD FLOAT NOT NULL,
+  TPR_IQR FLOAT NOT NULL,
   FOREIGN KEY(trainings_id) REFERENCES DL_Training_Anomaly(id)
   );
 

@@ -5,6 +5,7 @@ import time
 import pickle
 import numpy as np
 import pandas as pd
+import csv
 from app.database.dbqueries import dbqueries
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -53,19 +54,23 @@ class AnomalyDetector(Model):
 class anomalydl:
 
     @staticmethod
-    def find_threshold(model, X_test, feature):
-        print("Predict autoencoder..." + feature + str(time.time()))
+    def find_threshold(model, X_test):
         reconstruction = model.predict(X_test)
-        print("Predict autoencoder...done" + feature + str(time.time()))
         train_loss = mae(X_test, reconstruction)
-        threshold = np.mean(train_loss) + 2*np.std(train_loss)
-        return threshold, train_loss
+        # Lower threshold: 
+        Q1,Q3 = np.percentile(train_loss , [25,75])
+        IQR = Q3 - Q1
+        IQR_lower_threshold = Q1 - 1.5*IQR
+        IQR_upper_threshold = Q3 + 1.5*IQR
+        STD_lower_threshold = np.mean(train_loss) - 2*np.std(train_loss)
+        STD_upper_threshold = np.mean(train_loss) + 2*np.std(train_loss)
+        return IQR_lower_threshold,IQR_upper_threshold, STD_lower_threshold, STD_upper_threshold, train_loss
 
     @staticmethod
-    def append_labels(train_loss, threshold):
+    def append_labels(train_loss, lower_threshold, upper_threshold):
         y_pred = []
         for i in range(0,len(train_loss)):
-            if train_loss[i] < threshold:
+            if train_loss[i] < upper_threshold and train_loss[i] > lower_threshold:
                 y_pred.append(0)
             else:
                 y_pred.append(1)
@@ -100,10 +105,17 @@ class anomalydl:
     def validate(features, training_path, device, db, experiment, behavior):
         for featurename, corpus in features[2].items():
             y = [1 for i in range(0,len(corpus))]
-            print("Testing ML: " + featurename)
-            threshhold = dbqueries.get_threshold(db, device, featurename)
-            threshhold = float(threshhold)
-            
+            print("Testing DL: " + featurename)
+            output = dbqueries.get_threshold(db, device, featurename)
+            if output is None:
+                print("No threshold found for " + featurename)
+                continue
+            # Unpack SQL row:
+            STD_lower = float(output[0][0])
+            STD_upper = float(output[0][1])
+            IQR_lower = float(output[0][2])
+            IQR_upper = float(output[0][3])
+        
             with open(training_path + '/scalers/' + featurename + '_scaler.pickle', 'rb') as f:
                 scaler = pickle.load(f)
             
@@ -116,10 +128,12 @@ class anomalydl:
 
             reconstruction = model.predict(corpus)
             loss = mae(corpus, reconstruction)
-            y_pred = anomalydl.append_labels(loss, threshhold)
-            accuracy = accuracy_score(y, y_pred)
+            y_pred_STD = anomalydl.append_labels(loss, STD_lower, STD_upper)
+            accuracy_STD = accuracy_score(y, y_pred_STD)
+            y_pred_IQR = anomalydl.append_labels(loss, IQR_lower, IQR_upper)
+            accuracy_IQR = accuracy_score(y, y_pred_IQR)
             primary_key = dbqueries.get_foreign_key_dl(db, device, featurename, "autoencoder")
-            dbqueries.create_dl_anomaly_testing(db, device, experiment, behavior, featurename, "autoencoder",accuracy, primary_key)
+            dbqueries.create_dl_anomaly_testing(db, device, experiment, behavior, featurename, "autoencoder",accuracy_STD, accuracy_IQR, primary_key)
         return
 
     @staticmethod
@@ -133,7 +147,7 @@ class anomalydl:
         for featurename, corpus in features[2].items():
             y = [0 for i in range(0,len(corpus))]
             print("Training DL: " + featurename)
-            X_train, X_test, y_train, y_test = train_test_split(corpus, y, test_size=0.3, random_state=42, shuffle=False)
+            X_train, X_test, y_train, y_test = train_test_split(corpus, y, test_size=0.1, random_state=42, shuffle=True)
 
             # Load scaler at training_path + '/scalers/' + featurename + '_scaler.pickle'
             with open(training_path + '/scalers/' + featurename + '_scaler.pickle', "rb") as f:
@@ -155,21 +169,40 @@ class anomalydl:
             early_stopping = EarlyStopping(monitor="val_loss", patience=10, mode="min")
             model.compile(optimizer='adam', loss="mae", metrics=["mae","accuracy"])
 
-            print("Start training autoencoder " + featurename + " " + str(time.time()))
+            start_training = time.time()
             model.fit(X_train, X_train, epochs=500, batch_size=120, shuffle=True, validation_data=(X_test, X_test), callbacks=[early_stopping], verbose=0)
-            print("End training autoencoder " + featurename + " " + str(time.time()))
+            end_training = time.time()
+            training_time = end_training - start_training
 
-            threshold, train_loss = anomalydl.find_threshold(model, X_test, featurename)
-            y_pred = anomalydl.append_labels(train_loss, threshold)
-            accuracy = accuracy_score(y_test, y_pred)
+            start_prediction = time.time()
+            IQR_lower, IQR_upper, STD_lower, STD_upper, train_loss = anomalydl.find_threshold(model, X_test)
+            end_prediction = time.time()
+            prediction_time = end_prediction - start_prediction
+            
+            # Prediction using STD:
+            y_pred_STD = anomalydl.append_labels(train_loss, STD_lower, STD_upper)
+            # Prediction using IQR:
+            y_pred_IQR = anomalydl.append_labels(train_loss, IQR_lower, IQR_upper)
+
+            accuracy_STD = accuracy_score(y_test, y_pred_STD)
+            accuracy_IQR = accuracy_score(y_test, y_pred_IQR)
+
+             # Save the metrics:
+            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+                fieldnames = ['Name', 'Start', 'End', 'Duration']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writerow({'Name':f'Training autoencoder with feature {featurename}', 'Start': start_training, 'End': end_training, 'Duration': end_training - start_training})
+                writer.writerow({'Name':f'Prediction autoencoder with feature {featurename}', 'Start': start_prediction, 'End': end_prediction, 'Duration': end_prediction - start_prediction})
+                # Close the file
+                csvfile.close()
 
             # Save the model as a pickle file:
             with open(training_path + '/models/' + featurename + "autoencoder" + ".pickle", "wb") as f:
                 pickle.dump(model, f)
 
             # DB Query:
-            dbqueries.create_dl_anomaly(db, device, featurename, "autoencoder", accuracy, threshold, str(hidden_layers))
-
+            dbqueries.create_dl_anomaly(db, device, featurename, "autoencoder", accuracy_STD, accuracy_IQR, STD_lower, STD_upper, IQR_lower, IQR_upper, str(hidden_layers), training_time, prediction_time)
+            
         return
 
             
