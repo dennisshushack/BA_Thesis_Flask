@@ -188,7 +188,7 @@ class anomalydl:
             accuracy_IQR = accuracy_score(y_test, y_pred_IQR)
 
              # Save the metrics:
-            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+            with open('output.csv', 'a', newline='') as csvfile:
                 fieldnames = ['Name', 'Start', 'End', 'Duration']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writerow({'Name':f'Training autoencoder with feature {featurename}', 'Start': start_training, 'End': end_training, 'Duration': end_training - start_training})

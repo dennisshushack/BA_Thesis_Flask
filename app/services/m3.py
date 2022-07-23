@@ -146,7 +146,7 @@ class m3:
         
 
             # Save metrics in .csv:
-            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+            with open('output.csv', 'a', newline='') as csvfile:
                 fieldnames = ['Name', 'Start', 'End', 'Duration']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writerow({'Name': f'Creating CountVectorizer_{n}', 'Start': start_create_cv, 'End': end_create_cv, 'Duration': end_create_cv - start_create_cv})

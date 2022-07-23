@@ -13,7 +13,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from app.database.dbqueries import dbqueries
-
+import csv
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
@@ -112,17 +112,32 @@ class classification:
 
             # Train the models:
             for name, clf in classifiers.items():
+                start_train = time.time()
                 clf.fit(X_train, y_train)
+                end_train = time.time()
+                training_time = end_train - start_train
                 # Save the model:
                 with open(training_path + '/models/' + featurename + '_' + name + '.pickle', 'wb') as f:
                     pickle.dump(clf, f)
 
                 # Evaluate the model:
+                start_eval = time.time()
                 y_pred = clf.predict(X_val)
+                end_eval = time.time()
+                testing_time = end_eval - start_eval
                 print(classification_report(y_val, y_pred))
                 with open(training_path + '/Reports/' + featurename + '_' + name + '_report.txt', 'w') as f:
                     f.write(classification_report(y_val, y_pred))
 
+            
+                    # Save the metrics:
+                with open('output.csv', 'a', newline='') as csvfile:
+                    fieldnames = ['Name', 'Start', 'End', 'Duration']
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writerow({'Name':f'Training Classification {name} with feature {featurename}', 'Start': start_train, 'End': end_train, 'Duration': end_train - start_train})
+                    writer.writerow({'Name':f'Testing Classification {name} with feature {featurename}', 'Start': start_eval, 'End': end_eval, 'Duration': end_eval - start_eval})
+                    csvfile.close()
+                    
         return
 
         
