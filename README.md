@@ -19,6 +19,7 @@ The entire Flask application is in the `app` Folder. It is structured in a Model
 3. The **View** is the Graphical User Interface. It encompasses the `app/templates` and the `app/static` folders.
 
 ## Installing the Flask Application
+This application handels the entire pre-processing, ML/DL anomaly detection and classification training/evaluation. When using System call data (SYS Monitor) a more powerfull computer is recommendet (mainly RAM and storage capacity) i.e. More than 8gb of RAM and more than 50 GB of storage capacity free.
 
 ### Prerequsites:
 A computer running Linux or a BSD-based distribution (i.e. Ubuntu, Arch, MAC OS) connected to LAN.
