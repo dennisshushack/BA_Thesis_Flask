@@ -9,12 +9,12 @@ from flask import request, jsonify
 from app import create_app
 from app.db import get_db, close_db, init_app
 from app.services.AuthenticationService import login_required
-from app.services.m3 import m3
-from app.services.m2 import m2
-from app.services.m1 import m1
-from app.services.m1live import m1live
-from app.services.m2live import m2live
-from app.services.m3live import m3live
+from app.services.SYS import SYS
+from app.services.KERN import KERN
+from app.services.RES import RES
+from app.services.RESlive import RESlive
+from app.services.KERNlive import KERNlive
+from app.services.SYSlive import SYSlive
 from app.services.anomalyml import anomalyml
 from app.services.anomalydl import anomalydl
 from app.services.classificationml import classification
@@ -54,45 +54,43 @@ def preprocess_data(monitors:list , subdirectories: dict, training_paths: list, 
     preprocessed_data = []
     for monitor in monitors:
 
-        # Preprocessing monitor 1:
-        if monitor == "m1":
+        if monitor == "RES":
             start_monitor_1 = time.time()
-            list_m1 = m1.preprocess_data(subdirectories)
+            list_RES = RES.preprocess_data(subdirectories)
             end_monitor_1 = time.time()
-            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+            with open('output.csv', 'a', newline='') as csvfile:
                 fieldnames = ['Name', 'Start', 'End', 'Duration']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writerow({'Name': 'Preprocess Monitor Timucin', 'Start': float(start_monitor_1), 'End': float(end_monitor_1), 'Duration': float(end_monitor_1 - start_monitor_1)})
+                writer.writerow({'Name': 'Preprocess RES', 'Start': float(start_monitor_1), 'End': float(end_monitor_1), 'Duration': float(end_monitor_1 - start_monitor_1)})
                 csvfile.close()    
-            preprocessed_data.append(list_m1)
+            preprocessed_data.append(list_RES)
 
-        elif monitor == "m2":
+        elif monitor == "KERN":
             start_monitor_2 = time.time()
-            list_m2 = m2.preprocess_data(subdirectories)
+            list_KERN = KERN.preprocess_data(subdirectories)
             end_monitor_2 = time.time()
-            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+            with open('output.csv', 'a', newline='') as csvfile:
                 fieldnames = ['Name', 'Start', 'End', 'Duration']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writerow({'Name': 'Preprocess Monitor Huertas', 'Start': float(start_monitor_2), 'End': float(end_monitor_2), 'Duration': float(end_monitor_2 - start_monitor_2)})
+                writer.writerow({'Name': 'Preprocess KERN', 'Start': float(start_monitor_2), 'End': float(end_monitor_2), 'Duration': float(end_monitor_2 - start_monitor_2)})
                 csvfile.close()
-            preprocessed_data.append(list_m2)
+            preprocessed_data.append(list_KERN)
 
         else:
             start_monitor_3 = time.time()
-            list_m3 = m3.preprocess_data(subdirectories, category, training_paths)
+            list_SYS = SYS.preprocess_data(subdirectories, category, training_paths)
             end_monitor_3 = time.time()
-            with open('/tmp/output.csv', 'a', newline='') as csvfile:
+            with open('output.csv', 'a', newline='') as csvfile:
                 fieldnames = ['Name', 'Start', 'End', 'Duration']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writerow({'Name': 'Preprocess Monitor Systemcalls', 'Start': float(start_monitor_3), 'End': float(end_monitor_3), 'Duration': float(end_monitor_3 - start_monitor_3)})
+                writer.writerow({'Name': 'Preprocess SYS', 'Start': float(start_monitor_3), 'End': float(end_monitor_3), 'Duration': float(end_monitor_3 - start_monitor_3)})
                 csvfile.close()
-            preprocessed_data.append(list_m3)
+            preprocessed_data.append(list_SYS)
 
 
     return preprocessed_data
             
 def train_anomaly_detection(db: sqlite3.Connection, device: str, preprocessed_data: dict, training_path: str):
-    # Training ML Algorithms:
     for feature in preprocessed_data:
         anomalyml.train(feature, training_path, device, db)
         anomalydl.train(feature, training_path, device, db)
@@ -108,9 +106,16 @@ def train_classification(preprocessed_data: dict, training_path: str):
     for feature in preprocessed_data:
         classification.train(feature, training_path)
 
+def test_classification(preprocessed_data:dict, training_path: str, path: str):
+    for feature in preprocessed_data:
+        classification.test(feature, training_path, path)
+
 ###################### Background Threads ##############################
 
 def background_training(data: json):
+    """
+    Main background thread for offline training and evaluation.
+    """
     app = create_app()
     with app.app_context():
         
@@ -167,70 +172,97 @@ def background_training(data: json):
         # Only for Classification training:
         if ml_type == 'classification' and category == 'training':
              train_classification(preprocessed_data, training_paths[0])
+        
+        if ml_type == 'classification' and category == 'testing':
+            test_classification(preprocessed_data, training_paths[0],path)
 
         close_db(db)
+        print("Done training or evaluating")
         return "Done"
-           
-                
-def background_live_thread(data:json):
-    dbService = dbqueries()
-    db = get_db()
-    data = request.get_json() 
-    device = data['device']
-    monitors = data['monitors'].split(',')
-    path = data['path']
-    category = "testing"
-    number = 0
-
-    # Get the paths and subdirectories of the path:
-    preprocessed_anomaly = {}
-    preprocessed_classification = {}
-    training_paths = get_paths(db, category, device, None, path)
-    subdirectories = identify_subdirectories(path)
     
-    # Preprocess the data:
-    for monitor in monitors:
-        if monitor == "m1":
-            return_dfs = m1live.preprocess_data(subdirectories, training_paths, number)
-            if return_dfs == None:
-                continue
-            preprocessed_anomaly['m1'] = return_dfs[0]
-            preprocessed_classification['m1'] = return_dfs[1]
-  
-        elif monitor == "m2":
-            return_dfs = m2live.preprocess_data(subdirectories, training_paths, number)
-            if return_dfs == None:
-                continue
-            preprocessed_anomaly['m2'] = return_dfs[0]
-            preprocessed_classification['m2'] = return_dfs[1]
-
-        elif monitor == "m3":
-            list_of_return_dict = m3live.preprocess_data(subdirectories, training_paths, number)
-            if list_of_return_dict == None:
-                continue
-            anomaly_dict = list_of_return_dict[0]
-            for name, df in anomaly_dict.items():
-                preprocessed_anomaly[name] = df
-            classification_dict = list_of_return_dict[1]
-            for name, df in classification_dict.items():
-                preprocessed_classification[name] = df
- 
-    
-    # Evaluate anomaly detection ML:
-    for feature, dataframe in preprocessed_anomaly.items():
-        anomalyml.validate_live(dataframe, training_paths[0], feature, db, device)
-    
-    # Evaluate anomaly detection DL:
-    for feature, dataframe in preprocessed_anomaly.items():
-        threshhold = dbqueries.get_threshold(db, device, feature)
-        threshhold = float(threshhold)
-        anomalydl.validate_live(dataframe, training_paths[0], feature, db, device, threshhold)
+def background_testing(data: json):
+    """
+    For live evaluation of data:
+    """
+    app = create_app()
+    with app.app_context():
         
-    # Evaluate classification ML:
-    for feature, dataframe in preprocessed_classification.items():
-        classification.validate_live(dataframe, training_paths[1], feature, db, device)
+        # Get the data from the database:
+        try:
+            db = get_db()
+        except:
+            app.logger.debug('Database not found')
+            return
 
+        # Get all the data from the request:
+        device = data['device']
+        monitors = data['monitors'].split(',')
+        path = data['path']
+        number = data['number']
+        print(number)
+        experiment = "live"
+        category = "testing"
+        path = path + '/' + experiment
+        # Initialize the database:
+        dbService = dbqueries()
+        db = get_db()
+
+        # Get the paths and subdirectories of the path:
+        preprocessed_anomaly = []
+        preprocessed_classification = []
+        # Gets the training path for anomaly detection + classification:
+        training_paths = get_paths(db, category, device, None, path)
+        # Gets the subdirectories of the path:
+        subdirectories = identify_subdirectories(path)
+
+
+        # Preprocess the data:
+        for monitor in monitors:
+            if monitor == "RES":
+                try:
+                    list_RES = RESlive.preprocess_data(subdirectories, number)
+                    preprocessed_anomaly.append(list_RES)
+                    preprocessed_classification.append(list_RES)
+                except:
+                    continue
     
+            elif monitor == "KERN":
+                try:
+                    list_KERN = KERNlive.preprocess_data(subdirectories, number)
+                    preprocessed_anomaly.append(list_KERN)
+                    preprocessed_classification.append(list_KERN)
+                except:
+                    continue
+
+            elif monitor == "SYS":
+                try:
+                    list_SYS = SYSlive.preprocess_data(subdirectories, number, training_paths)
+                    preprocessed_anomaly.append(list_SYS[0])
+                    preprocessed_classification.append(list_SYS[1])
+                except:
+                    continue
+        
+        # Anomaly detection ML / DL:
+        for feature in preprocessed_anomaly:
+            try:
+                anomalyml.validate_live(feature, training_paths[0], device, db)
+            except:
+                continue
+            try:
+                anomalydl.validate_live(feature, training_paths[0], device, db)
+            except:
+                continue
+
+        # Classification:
+        for feature in preprocessed_classification:
+            try:
+                classification.validate_live(feature, training_paths[1], device, db)
+            except:
+                continue
+        db.close()
+        return
+        
+
 ################################# Endpoints #####################################
 
 @bp.route('/test', methods=['GET'])
@@ -256,8 +288,7 @@ def training():
     data = request.get_json()
 
     # Start the background job (prevents the server from being blocked by a request):
-    #threading.Thread(target=background_training, args=(data,)).start()
-    background_training(data)
+    threading.Thread(target=background_training, args=(data,)).start()
     return jsonify({"status": "ok", "message": "started"})
 
 
@@ -266,21 +297,15 @@ def training():
 @login_required
 def live():
     """
-    This endpoint is used for live testing the anomaly detection &
+    This endpoint is used for live testing anomaly detection &
     classification
     """
-    
     # Checks, if the input body is in a JSON format:
     if not request.is_json:
         return jsonify({"status": "error", "message": "input error not json"})
 
-    # Gets the data from the request:
-    data = request.get_json()
-    threading.Thread(target=background_live_thread, args=(data,)).start()
+    # Start the background job (prevents the server from being blocked by a request):
+    threading.Thread(target=background_testing, args=(request.get_json(),)).start()
     return jsonify({"status": "ok", "message": "started"})
 
-    
-
-
-
-    
+    # END VERSION 1.0

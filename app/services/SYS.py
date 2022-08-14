@@ -4,7 +4,6 @@ import re
 import pandas as pd
 import numpy as np
 import pickle
-import warnings
 import time
 import csv
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer, HashingVectorizer
@@ -12,7 +11,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer, Ha
 ##############################################################################################################################
 #                                                   Data Cleaning                                                         # 
 ##############################################################################################################################
-class m3:
+class SYS:
     @staticmethod
     def extract_line(line: str, real_timestamp) -> list:
         """
@@ -47,7 +46,7 @@ class m3:
         # Iterate over the dictionary input_dirs
         skipped = 0
         for key, value in input_dirs.items():
-            input_dir = value + "/m3"
+            input_dir = value + "/SYS"
             # Iterate over the files in the directory (path):
             for inputfile in os.listdir(input_dir):
                 if inputfile.endswith('.log'):
@@ -60,7 +59,7 @@ class m3:
                             outp.write(','.join(columnNames) + '\n')
                             for line in inp:
                                 try:
-                                    res = m3.extract_line(line,real_timestamp)
+                                    res = SYS.extract_line(line,real_timestamp)
                                 except:
                                     res = None
                                 if res is not None and res != 'summary':
@@ -118,7 +117,6 @@ class m3:
             start_apply_hv = time.time()
             print("Applying HashingVectorizer...")
             HashingVectorizer_corpus = hash.transform(corpus).toarray()
-            print("We got here")
             end_apply_hv = time.time()
             corpuses[f'HashingVectorizer_{n}'] = HashingVectorizer_corpus
             del HashingVectorizer_corpus
@@ -139,7 +137,7 @@ class m3:
             corpuses[f'TfidfVectorizer_{n}'] = TfidfVectorizer_corpus
             del TfidfVectorizer_corpus
 
-            print("Finished with all!")
+           
 
             # Delete the corpus:
             del corpus
@@ -222,7 +220,7 @@ class m3:
                 except:
                     continue
                 tr = trace['syscall'].tolist()
-                longstr = m3.from_list_to_str(tr)
+                longstr = SYS.from_list_to_str(tr)
                 corpus.append(longstr)
         return corpus
     
@@ -234,18 +232,29 @@ class m3:
     @staticmethod
     def preprocess_data(input_dirs: dict, category: str, training_dirs: list):
         """
-        Preprocesses m3: return => [timestamps, behaviors, dict_of_features]
+        Preprocesses SYS: return => [timestamps, behaviors, dict_of_features]
         """
 
-        print("Cleaning m3's data...")
-        m3.clean_data(input_dirs)
+        print("Cleaning SYS's data...")
+        time_start = time.time()
+        SYS.clean_data(input_dirs)
+        time_end = time.time()
+
+        # Save in the output.csv:
+        with open('output.csv', 'a', newline='') as csvfile:
+            fieldnames = ['Name', 'Start', 'End', 'Duration']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writerow({'Name': 'Cleaning SYS\'s data', 'Start': time_start, 'End': time_end, 'Duration': time_end - time_start})
+            csvfile.close()
+
         print("Creating the corpus...")
+        time_start = time.time()
         features = []
         file_ids, behaviors = [], []
         corpus = []
 
         for key, value in input_dirs.items():
-            input_dir = value + "/m3"
+            input_dir = value + "/SYS"
             behavior = key
             files = os.listdir(input_dir)
             # This is for every subirecory 
@@ -255,20 +264,27 @@ class m3:
                 if '.csv' in file:
                     file_ids_sub.append(int(file.replace('.csv', '')))
                     behaviors_sub.append(behavior)
-            corpus_subdirectory = m3.get_corpus(input_dir, files)
+            corpus_subdirectory = SYS.get_corpus(input_dir, files)
             corpus.extend(corpus_subdirectory)
             file_ids.extend(file_ids_sub)
             behaviors.extend(behaviors_sub)
             del file_ids_sub, behaviors_sub, corpus_subdirectory
+        time_end = time.time()
+        # Save in the output.csv:
+        with open('output.csv', 'a', newline='') as csvfile:
+            fieldnames = ['Name', 'Start', 'End', 'Duration']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writerow({'Name': 'Creating the corpus', 'Start': time_start, 'End': time_end, 'Duration': time_end - time_start})
+            csvfile.close()
         
         # Here we have the timestamps and behaviors:
         features.append(file_ids)
         features.append(behaviors)
 
         if category == "training":
-            return m3.make_vectorizers(corpus, training_dirs[0], features)
+            return SYS.make_vectorizers(corpus, training_dirs[0], features)
         elif category == "testing":
-            return m3.apply_vectorizers(corpus, training_dirs[0], features)
+            return SYS.apply_vectorizers(corpus, training_dirs[0], features)
 
 
 

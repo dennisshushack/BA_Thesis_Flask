@@ -25,41 +25,6 @@ class classification:
     for classification.
     """
     @staticmethod
-    def validate_live(df, training_path, feature, db, device):
-        """
-        This function evaluates, to which class the sample belongs too.
-        """
-        X = df[feature].tolist()
-        X = np.array(X)
-        time_stamp = df['timestamps'].tolist()
-        time_stamp = time_stamp[0]
-
-
-        # Loads the model from the pickle file
-        with open(training_path + "/MLmodels/" + feature + "LogisticRegression" + ".pickle", "rb") as f:
-            model = pickle.load(f)
-        
-        # Predict the class of the sample
-        start_time = time.time()
-        y_pred = model.predict(X)
-        end_time = time.time()
-        testing_time = end_time - start_time
-        y_pred = y_pred[0] 
-        if y_pred == "normal":
-            y_pred = 0
-        elif y_pred == "poc":
-            y_pred = 1
-        elif y_pred == "dark":
-            y_pred = 2
-        else:
-            y_pred = 3
-        
-        # Insert the prediction into the database
-        dbqueries.insert_into_live(db, device, "classification","LogisticRegression", feature, time_stamp,y_pred, testing_time)
-
-
-
-    @staticmethod
     def train(features, training_path):
 
          # Checking all paths:
@@ -79,7 +44,7 @@ class classification:
         classifiers = {
             'LogisticRegression': LogisticRegression(solver='saga', multi_class='ovr', max_iter=5000),
             'DecisionTreeClassifier': DecisionTreeClassifier(),
-            'SVC': SVC(gamma='auto', kernel='rbf'),
+            'SVM': SVC(gamma='auto', kernel='rbf'),
             'RandomForestClassifier': RandomForestClassifier()
         }
 
@@ -139,7 +104,91 @@ class classification:
                     csvfile.close()
                     
         return
+    
+    @staticmethod
+    def validate_live(features, training_path, device, db):
+        
+        for featurename, corpus in features[1].items():
+            timestamp = features[0][0]
+            timestamp = int(timestamp)
+            classifiers = ["LogisticRegression", "DecisionTreeClassifier", "SVM", "RandomForestClassifier"]
 
+            # Load scaler:
+            with open(training_path + '/scalers/' + featurename + '_scaler.pickle', 'rb') as f:
+                scaler = pickle.load(f)
+
+            corpus = scaler.transform(corpus)
+
+            for classifier_name in classifiers:
+                # Load model:
+                with open(training_path + '/models/' + featurename + '_' + classifier_name + '.pickle', 'rb') as f:
+                    clf = pickle.load(f)
+
+                # Predict:
+                start = time.time()
+                y_pred = clf.predict(corpus)
+                end = time.time()
+                duration = end - start
+                y_pred = y_pred[0]
+                if y_pred == "normal":
+                    y_pred = 0
+                elif y_pred == "raas":
+                    y_pred = 1
+                elif y_pred == "poc":
+                    y_pred = 2
+                else:
+                    y_pred = 3
+                dbqueries.insert_into_live(db, device, "classification", classifier_name, featurename, timestamp, y_pred, duration)
+        
+        return
+                
+
+
+        
+
+
+
+    @staticmethod
+    def test(features, training_path, path):
+        classifiers = ["LogisticRegression", "DecisionTreeClassifier", "SVM", "RandomForestClassifier"]
+        # Create direcory for evaluation:
+        if not os.path.exists(path + '/evaluation/'):
+            os.makedirs(path + '/evaluation/')
+
+        # Create a preprocessed data folder:
+        if not os.path.exists(path + '/preprocessed/'):
+            os.makedirs(path + '/preprocessed/')
+
+        for featurename, corpus in features[2].items():
+        
+            # Load the scaler:
+            with open(training_path + '/scalers/' + featurename + '_scaler.pickle', 'rb') as f:
+                scaler = pickle.load(f)
+            
+            # Standardize the data:
+            corpus = scaler.transform(corpus)
+
+            timestamp = features[0]
+            behaviors = features[1]
+            normaled_df = pd.DataFrame([timestamp, behaviors, corpus.tolist()]).transpose()
+            normaled_df.columns = ['timestamp', 'behavior', featurename]
+            normaled_df.to_csv(path + '/preprocessed/' + featurename + '_preprocessed.csv', index=False)
+
+            # Load the model and do the training:
+            for name in classifiers:
+                with open(training_path + '/models/' + featurename + '_' + name + '.pickle', 'rb') as f:
+                    clf = pickle.load(f)
+
+                # Predict the labels:
+                y_pred = clf.predict(corpus)
+                normaled_df = pd.DataFrame([timestamp, behaviors, y_pred]).transpose()
+                normaled_df.columns = ['timestamp', 'actualbehavior', 'prediction']
+                normaled_df.to_csv(path + '/evaluation/' + featurename + '_' + name + '_evaluation.csv', index=False)
+        return
+               
+
+
+  
         
         
 

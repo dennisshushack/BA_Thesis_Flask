@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 import pickle
 import warnings
+
+from .classificationml import classification
 warnings.simplefilter(action='ignore', category=FutureWarning)
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
@@ -12,7 +14,7 @@ if not sys.warnoptions:
 ##############################################################################################################################
 #                                                   Data Cleaning
 ##############################################################################################################################
-class m3live:
+class SYSlive:
     @staticmethod
     def extract_line(line: str, real_timestamp) -> list:
         """
@@ -47,38 +49,39 @@ class m3live:
         # Iterate over the dictionary input_dirs
         skipped = 0
         output_name = ""
-        input_dir = input_dirs + "/m3"
-        inputfiles = os.listdir(input_dir)
-        # Sort the files by timestamp
-        inputfiles.sort(key=lambda x: float(x.split('.')[0]))
-        # Get the file at the the number-th position
-        inputfile = inputfiles[number]
-        if inputfile.endswith('.log'):
-            outputfile = inputfile.replace('.log', '.csv')
-            output_path = input_dir + "/" + outputfile
-            outputfile_name = inputfile.split('.')[0]
-            # Read the file & create an output file:
-            with open(input_dir + "/" + inputfile, 'r') as inp, open(input_dir + "/" + outputfile, 'w') as outp:
-                real_timestamp = inputfile.split('.')[0]
-                columnNames = ['timestamp', 'pid', 'syscall', 'time_cost']
-                outp.write(','.join(columnNames) + '\n')
-                for line in inp:
-                    try:
-                        res = m3live.extract_line(line,real_timestamp)
-                    except:
-                        res = None
-                    if res is not None and res != 'summary':
-                        [timestamp, pid, syscall, time_cost] = res
-                        outp.write(timestamp + ',' + pid + ',' + syscall + ',' + time_cost + '\n')
-                        outp.write('{},{},{},{}\n'.format(timestamp, pid, syscall, time_cost))
-                    elif res == 'summary':
-                        break
-                inp.close()
-                outp.close()
-                # Remove the original .log file:
-                os.remove(input_dir + "/" + inputfile)
-        arry = [outputfile_name, output_path]
-        return arry
+        for key, value in input_dirs.items():
+            input_dir = value + "/SYS"
+            inputfiles = os.listdir(input_dir)
+            # Sort the files by timestamp
+            inputfiles.sort(key=lambda x: float(x.split('.')[0]))
+            # Get the file at the the number-th position
+            inputfile = inputfiles[number]
+            if inputfile.endswith('.log'):
+                outputfile = inputfile.replace('.log', '.csv')
+                output_path = input_dir + "/" + outputfile
+                outputfile_name = inputfile.split('.')[0]
+                # Read the file & create an output file:
+                with open(input_dir + "/" + inputfile, 'r') as inp, open(input_dir + "/" + outputfile, 'w') as outp:
+                    real_timestamp = inputfile.split('.')[0]
+                    columnNames = ['timestamp', 'pid', 'syscall', 'time_cost']
+                    outp.write(','.join(columnNames) + '\n')
+                    for line in inp:
+                        try:
+                            res = SYSlive.extract_line(line,real_timestamp)
+                        except:
+                            res = None
+                        if res is not None and res != 'summary':
+                            [timestamp, pid, syscall, time_cost] = res
+                            outp.write(timestamp + ',' + pid + ',' + syscall + ',' + time_cost + '\n')
+                            outp.write('{},{},{},{}\n'.format(timestamp, pid, syscall, time_cost))
+                        elif res == 'summary':
+                            break
+                    inp.close()
+                    outp.close()
+                    # Remove the original .log file:
+                    os.remove(input_dir + "/" + inputfile)
+            arry = [outputfile_name, output_path]
+            return arry
 
 ##############################################################################################################################
 #                                                   Load Vectorizer
@@ -137,7 +140,7 @@ class m3live:
         trace = pd.read_csv(file_path)
         corpus_dataframe.append(trace)
         tr = trace['syscall'].tolist()
-        longstr = m3live.from_list_to_str(tr)
+        longstr = SYSlive.from_list_to_str(tr)
         corpus.append(longstr)
         return corpus_dataframe, corpus
 
@@ -146,14 +149,22 @@ class m3live:
 ###############################################################################################################################
     @staticmethod
     def preprocess_data(input_dirs: dict,  number:int, training_dir: str):
-        features = []
-        arry= m3live.clean_data(input_dirs,number)
+        return_list = []
+        anomaly_training_path = training_dir[0]
+        classification_training_path = training_dir[1]
+        features_anomaly = []
+        features_classification = []
+        arry= SYSlive.clean_data(input_dirs,number)
         file_name = arry[0]
         file_path = arry[1]
-        features.append([file_name])
-        corpus_dataframe ,corpus = m3live.get_corpus(file_path)
-        return m3live.apply_vectorizers(corpus, training_dir, features)
-
+        features_anomaly.append([file_name])
+        features_classification.append([file_name])
+        corpus_dataframe ,corpus = SYSlive.get_corpus(file_path)
+        anomaly_result = SYSlive.apply_vectorizers(corpus, anomaly_training_path, features_anomaly)
+        classification_result = SYSlive.apply_vectorizers(corpus, classification_training_path, features_classification)
+        return_list.append(anomaly_result)
+        return_list.append(classification_result)
+        return return_list
 
 
             

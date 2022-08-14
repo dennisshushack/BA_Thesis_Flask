@@ -1,6 +1,5 @@
 import os 
 import sys
-import pickle
 import numpy as np
 import pandas as pd
 import warnings
@@ -12,7 +11,7 @@ if not sys.warnoptions:
 ###############################################################################
 #                              Cleaning Data                                  #
 ###############################################################################
-class m1:
+class RES:
     @staticmethod
     def preprocess_data(input_dirs: dict) -> pd.DataFrame:
         """
@@ -24,7 +23,7 @@ class m1:
         timestamps = []
         
         for key, value in input_dirs.items():
-            input_dir = value + "/m1"
+            input_dir = value + "/RES"
             behavior = key
             files = os.listdir(input_dir)
 
@@ -55,8 +54,8 @@ class m1:
         df.dropna(inplace=True)
         features.append(timestamps)
         features.append(vector_behavior)
-        m1 = {"m1": df}
-        features.append(m1)
+        RES = {"RES": df}
+        features.append(RES)
         return features
             
             

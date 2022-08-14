@@ -15,7 +15,7 @@ bp = Blueprint('admin', __name__, url_prefix='/')
 def admin_dashboard():
     return render_template("main.html")
 
-@bp.route('/classification/')
+@bp.route('/live/')
 def admin_live():
     return render_template("classification.html")
 
@@ -51,23 +51,50 @@ def get_features():
     return features
 
 @bp.route('/post/classification', methods=['POST','GET'])
-
 @login_required
 def get_classification():
     """This method gets the classification"""
     # Get's the json data from the request:
     device = request.form.get("device")
     feature = request.form.get("feature")
+    algorithm = request.form.get("algorithm")
     try:
         db = get_db()
     except:
         pass
 
-    classification = dbqueries.get_live_anomaly(db, device,"LogisticRegression",feature)
+    classification = dbqueries.get_live_anomaly(db, device, algorithm,feature)
     close_db()
-    classification = [tuple(row) for row in classification]
-    classification = json.dumps(classification)
+    # Make it usable for the frontend:
+    data=[]
+    for row in classification:
+        data.append({"timestamp":row[0],"value":row[1]})
+    classification = json.dumps(data)
     return classification
+
+
+@bp.route('/post/anomaly', methods=['POST','GET'])
+@login_required
+def get_anomaly():
+    """This method gets the classification"""
+    # Get's the json data from the request:
+    device = request.form.get("device")
+    feature = request.form.get("feature")
+    algorithm = request.form.get("algorithm")
+    try:
+        db = get_db()
+    except:
+        pass
+
+    classification = dbqueries.get_live_anomaly_detection(db, device, algorithm,feature)
+    close_db()
+    # Make it usable for the frontend:
+    data=[]
+    for row in classification:
+        data.append({"timestamp":row[0],"value":row[1]})
+    classification = json.dumps(data)
+    return classification
+
 
 
 

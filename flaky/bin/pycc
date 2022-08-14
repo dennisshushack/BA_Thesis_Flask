@@ -1,3 +1,0 @@
-#!/home/dennis/Videos/BA_Thesis_Flask/flaky/bin/python3
-from numba.pycc import main
-main()

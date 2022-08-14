@@ -1,14 +1,13 @@
 import os 
 import sys
-import pickle
 import numpy as np
 import pandas as pd
 import warnings
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
-# M2 (Anomaly & Classification)
-class m2:
+# KERN (Anomaly & Classification)
+class KERN:
     @staticmethod
     def preprocess_data(input_dirs: dict) -> pd.DataFrame:
         """
@@ -20,7 +19,7 @@ class m2:
         timestamps = []
 
         for key, value in input_dirs.items():
-            input_dir = value + "/m2"
+            input_dir = value + "/KERN"
             behavior = key
             files = os.listdir(input_dir)
             for file in files:
@@ -54,7 +53,7 @@ class m2:
         # Check, that timestamp and vector_behavior are the same length:s         
         features.append(timestamps)
         features.append(vector_behavior)
-        m2 = {"m2": df}
-        features.append(m2)
+        KERN = {"KERN": df}
+        features.append(KERN)
         return features
             

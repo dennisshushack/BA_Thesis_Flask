@@ -77,28 +77,45 @@ class anomalydl:
         return y_pred
     
     @staticmethod
-    def validate_live(df, train_path, feature, db, device, threshold):
-        model_list = []
-        X = df[feature].tolist()
-        X = np.array(X)
-        timestamp = df['timestamps'].tolist()
-        time_stamp = timestamp[0]
-        y = [1]
-         
-        # Load the trained model:
-        with open(train_path + "/MLmodels/" + feature + "autoencoder.pickle", "rb") as f:
-            model = pickle.load(f)
+    def validate_live(features, training_path, device, db):
         
-        t1 = time.time()
-        reconstruction = model.predict(X)
-        t2 = time.time()
-        test_time = t2 - t1
-        loss = mae(X, reconstruction)
-        # Get the y_pred:
-        y_pred = anomalydl.append_labels(loss, threshold)
-        y_pred = y_pred[0]
-        y_pred = int(y_pred)
-        dbqueries.insert_into_live(db, device, "anomaly", "autoencoder", feature, time_stamp, y_pred, test_time)
+        for featurename, corpus in features[1].items():
+            timestamp = features[0][0]
+            timestamp = int(timestamp)
+            output = dbqueries.get_threshold(db, device, featurename)
+            # Unpack SQL row:
+            STD_lower = float(output[0][0])
+            STD_upper = float(output[0][1])
+            IQR_lower = float(output[0][2])
+            IQR_upper = float(output[0][3])
+
+            # Load scaler:
+            with open(training_path + '/scalers/' + featurename + '_scaler.pickle', 'rb') as f:
+                scaler = pickle.load(f)
+
+            corpus = scaler.transform(corpus)
+            # Load the trained model:
+            with open(training_path + '/models/' + featurename + "autoencoder" + ".pickle", "rb") as f:
+                model = pickle.load(f)
+
+            start = time.time()
+            reconstruction = model.predict(corpus)
+            end = time.time()
+            test_time = end - start
+            reconstruction = model.predict(corpus)
+            loss = mae(corpus, reconstruction)
+            y_pred_STD = anomalydl.append_labels(loss, STD_lower, STD_upper)
+            y_pred_IQR = anomalydl.append_labels(loss, IQR_lower, IQR_upper)
+            dbqueries.insert_into_live(db, device, "anomaly", "autoencoder_STD", featurename, timestamp, int(y_pred_STD[0]), test_time)
+            dbqueries.insert_into_live(db, device, "anomaly", "autoencoder_IQR", featurename, timestamp, int(y_pred_IQR[0]), test_time)
+
+        return
+
+
+
+
+
+
 
 
     @staticmethod

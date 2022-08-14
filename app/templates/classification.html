@@ -8,50 +8,115 @@
     padding: 0;
     font-family: sans-serif;
   }
+  .chartCard {
+        width: 100vw;
+        height: calc(100vh - 40px);
+        display: flex;
+       
+      }
   .chartBox {
-        width: 900px;
-        padding: 20px;
-        border-radius: 20px;
+        width: 1000px;
+        padding: 1px;
+        border-radius: 10px;
         background: white;
       }
     </style>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!--Device Field -->
 <form class="box">
     <div class="field">
       <label class="label">Device</label>
       <div class="select is-info pb-3 mb-3">
-        <select class="default_select"
-        id="default_select"  name="device"  required>
+        <select class="default_select_1"
+        id="default_select_1"  name="device"  required>
             <option value="">Choose a Device...</option>
         </select>
     </div>
-  
+
+   <!--Monitor Script Field-->
+    <div class="field">
+      <label class="label">Monitoring Script</label>
+      <div class="select is-info pb-3 mb-3">
+        <select class="default_select_2"
+        id="default_select_2"  name="feature"  required>
+            <option value="">Choose a Monitoring Script...</option>
+        </select>
+    </div>
+  </div>
+
+  <!--Features Field-->
     <div class="field">
         <label class="label">Feature</label>
         <div class="select is-info pb-3 mb-3">
-          <select class="default_select_2"
-          id="default_select_2"  name="feature"  required>
+          <select class="default_select_3"
+          id="default_select_3"  name="feature"  required>
               <option value="">Choose a Feature...</option>
           </select>
       </div>
     </div>
+
+    <!--Anomaly Detection Algorithm Field-->
+    <div class="field">
+      <label class="label">Anomaly Detection Algorithm</label>
+      <div class="select is-info pb-3 mb-3">
+        <select class="default_select_4"
+        id="default_select_4"  name="feature"  required>
+            <option value="">Choose an Algorithm...</option>
+            <option value="IsolationForest">IsolationForest</option>
+            <option value="OneClassSVM">OneClassSVM</option>
+            <option value="LocalOutlierFactor">LocalOutlierFactor</option>
+            <option value="autoencoder_STD">autoencoder_STD</option>
+            <option value="autoencoder_IQR">autoencoder_IQR</option>
+        </select>
+    </div>
+  </div>
+
+  <!--Classification Algorthm Field-->
+  <div class="field">
+    <label class="label">Classification Algorithm</label>
+    <div class="select is-info pb-3 mb-3">
+      <select class="default_select_5"
+      id="default_select_5"  name="feature"  required>
+          <option value="">Choose an Algorithm...</option>
+          <option value="SVM">SVM</option>
+          <option value="DecisionTreeClassifier">DecisionTreeClassifier</option>
+          <option value="LogisticRegression">LogisticRegression</option>
+          <option value="RandomForestClassifier">RandomForestClassifier</option>
+      </select>
+  </div>
+</div>
+
   
     <button class="button is-link" id="submit">Submit</button>
   </form>
 
   <!--Chart with Chart JS-->
-  <div class="chartBox">
-    <div class="card-content">
-      <div class="chartCard">
-        <canvas id="myChart"></canvas>
-      </div>
+  <div class="chartCard">
+    <div class="chartBox">
+      <canvas id="myChart2"></canvas>
+    </div>
+    <div class="chartBox">
+      <canvas id="myChart"></canvas>
     </div>
   </div>
+
   
 
 
 <!-- Ajax/JavaScript-->
 <script type="text/javascript">
+  
+    // WHenever site loads set the default value of the dropdown menu to the first option
+    $(document).ready(function(){
+      $('#default_select_1').val('{{ device }}');
+      $('#default_select_2').val('{{ feature }}');
+      $('#default_select_3').val('{{ feature }}');
+      $('#default_select_4').val('{{ algorithm }}');
+      $('#default_select_5').val('{{ algorithm }}');
+    });
+
+
     // This method gets all types and all tables:
     let types = []
       $.ajax({
@@ -60,58 +125,102 @@
         dataType: 'json', // added data type
         success: function(res) {
             res.forEach(function (value, i){
-                $('select.default_select').append(`<option value=${value}>${value}</option>`);
+                $('select.default_select_1').append(`<option value=${value}>${value}</option>`);
             });
         }
          });
-    // This method gets all possible features:
-    let features = []
+
+    // This method gets all Monitor Scripts available:
+    let scripts = []
       $.ajax({
         url: "/get/features",
         type: 'GET',
         dataType: 'json', // added data type
         success: function(res) {
             res.forEach(function (value, i){
-                $('select.default_select_2').append(`<option value=${value}>${value}</option>`);
+                if(value == 'CountVectorizer_1' | value == 'HashingVectorizer_1' | value == 'TfidfVectorizer_1'){
+                  value ="SYS"
+                }
+                // Append SYS only once
+                if(scripts.includes(value) == false){
+                  scripts.push(value)
+                  $('select.default_select_2').append(`<option value=${value}>${value}</option>`);
+                }
             });
         }
          });
 
+      // Dependent Feature dropdown menu:
+      $('select.default_select_2').change(function(){
+        let selected = $(this).find(':selected').val()
+        console.log(selected)
+        if(selected == 'RES'){
+          $('select.default_select_3').empty();
+          $('select.default_select_3').append(`<option value=${selected}>${selected}</option>`);
+        }
+        else if(selected == 'SYS'){
+          // Remove all options
+          $('select.default_select_3').empty();
+          $('select.default_select_3').append(`<option value=${'CountVectorizer_1'}>${'CountVectorizer_1'}</option>`);
+          $('select.default_select_3').append(`<option value=${'HashingVectorizer_1'}>${'HashingVectorizer_1'}</option>`);
+          $('select.default_select_3').append(`<option value=${'TfidfVectorizer_1'}>${'TfidfVectorizer_1'}</option>`);
 
+        }
+        else if(selected == 'KERN'){
+          $('select.default_select_3').empty();
+          $('select.default_select_3').append(`<option value=${selected}>${selected}</option>`);
+        }
+      });
+    
     // When two dropdown menus are selected and someone clicks the button, this method sends the data to the server to /post/classification
     // and then gets the result and displays it in a line chart.
-    let timestamps = []
-    let values = []
     $('#submit').click(function(e){
         e.preventDefault();
-        let device = $('#default_select').val();
-        let feature = $('#default_select_2').val();
+        let device = $('#default_select_1').val();
+        let feature = $('#default_select_3').val();
+        let algorithm = $('#default_select_5').val();
         $.ajax({
             url: "/post/classification",
             type: 'POST',
             data: {
                 device: device,
-                feature: feature
+                feature: feature,
+                algorithm: algorithm
             },
             dataType: 'json', // added data type
             success: function(res) {
-                let data = res.data;
+              console.log(res)
                 res.forEach(function (value, i){
-                // Create a new array with the data from the server:
-                timestamps.push(value[0]);
-                values.push(value[1])       
-                });     
-                //add the data to the chart:
-                addData(myChart,timestamps, values)
+                  addData(myChart,value.timestamp, value.value);
+
+                });
+       
+              }})
+        $.ajax({
+            url: "/post/anomaly",
+            type: 'POST',
+            data: {
+                device: device,
+                feature: feature,
+                algorithm: $('#default_select_4').val()
+            },
+            dataType: 'json', // added data type
+            success: function(res) {
+              console.log(res)
+              res.forEach(function (value, i){
+                addData(myChart2,value.timestamp, value.value);
+
+                });
+       
               }})
             });
 
             // Create a new line chart with the data from y = values (0, 1, 2 or 3) and x = timestamps:
-            const data = {
-                labels: timestamps,
+            const dataClassification = {
+                labels: [],
                 datasets: [{
                 label: "Classification",
-                data: values,
+                data: [],
                 backgroundColor: [
                   'rgba(255, 26, 104, 0.2)',
                   'rgba(54, 162, 235, 0.2)',
@@ -130,32 +239,125 @@
                   'rgba(255, 159, 64, 1)',
                   'rgba(0, 0, 0, 1)'
                 ],
-                borderWidth: 1
+                borderWidth: 2
               }]
             };
-            // config 
-            const config = {
+
+            const dataAnomaly = {
+                labels: [],
+                datasets: [{
+                label: "Anomaly Detection",
+                data: [],
+                backgroundColor: [
+                  'rgba(255, 26, 104, 0.2)',
+                  'rgba(54, 162, 235, 0.2)',
+                  'rgba(255, 206, 86, 0.2)',
+                  'rgba(75, 192, 192, 0.2)',
+                  'rgba(153, 102, 255, 0.2)',
+                  'rgba(255, 159, 64, 0.2)',
+                  'rgba(0, 0, 0, 0.2)'
+                ],
+                borderColor: [
+                  'rgba(255, 26, 104, 1)',
+                  'rgba(54, 162, 235, 1)',
+                  'rgba(255, 206, 86, 1)',
+                  'rgba(75, 192, 192, 1)',
+                  'rgba(153, 102, 255, 1)',
+                  'rgba(255, 159, 64, 1)',
+                  'rgba(0, 0, 0, 1)'
+                ],
+                borderWidth: 2
+              }]
+            };
+
+            const configAnomaly = {
               type: 'line',
-              data,
+              data: dataAnomaly,
               options: {
                 scales: {
-                  y: {
-                    beginAtZero: false,
-                    min: 0,
-                    max: 3,
+               
+                  yAxes: [{
                     ticks: {
-                      stepSize: 1
+                      beginAtZero: true
+
+                    }
+                  }],
+                  y: {
+                    min: 0,
+                    max: 1,
+                    ticks: {
+                      stepSize: 1,
+                      callback: function(value,index)
+                      {
+                        console.log(this.getLabelForValue(value))
+                        if (this.getLabelForValue(index) == 0){
+                          return "Normal"
+                      }  else {
+                        return "Anomaly"
+                      }
                     }
                   }
                 }
+                }
               }
+            
             };
-            // render init block
+
+
+
+
+            // config 
+            const configClassification = {
+              type: 'line',
+              data: dataClassification,
+              options: {
+                scales: {
+               
+                  yAxes: [{
+                    ticks: {
+                      beginAtZero: true
+
+                    }
+                  }],
+                  y: {
+                    min: 0,
+                    max: 3,
+                    ticks: {
+                      stepSize: 1,
+                      callback: function(value,index)
+                      {
+                        console.log(this.getLabelForValue(value))
+                        if (this.getLabelForValue(index) == 0){
+                          return "Normal"
+                        }if (this.getLabelForValue(index) == 1){
+                          return "RAASNet"
+                        }if (this.getLabelForValue(index) == 2){
+                          return "Ransomware-PoC"
+                      }  if (this.getLabelForValue(index) == 3){
+                        return "DarkRadiation"
+                      }
+                    }
+                  }
+                }
+                }
+              }
+            
+            };
+
+
+
+
 const myChart = new Chart(
   document.getElementById('myChart'),
-  config
+  configClassification
 );
-      
+
+const myChart2 = new Chart(
+  document.getElementById('myChart2'),
+  configAnomaly
+  );
+
+
 
 function addData(chart, label, data) {
     chart.data.labels.push(label);
@@ -175,6 +377,10 @@ function removeData(chart) {
 
                 
 
+
+
+    
+</script>
 
 
     

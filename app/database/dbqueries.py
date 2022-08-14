@@ -5,7 +5,7 @@ class dbqueries:
         """
         Inserts the data into the post_requests table.
         :input: db_connection: database connection, description: description of the request, 
-        category: category of the request, type: normal, ransom1, ransom2, path: path of the data
+        category: category of the request, type: normal, ransoRES, ransoKERN, path: path of the data
         device: an indicator for the device that made the request
         """
         cursor = db_connection.cursor()
@@ -215,8 +215,29 @@ class dbqueries:
         cursor = db_connection.cursor()
         cursor.execute("""
             SELECT time_stamp, anomaly_class FROM live_anomaly
+            WHERE device = ? AND algo = ? AND feature = ? 
+            ORDER BY time_stamp
+        """, (device, algo, feature))
+        anomaly_class = cursor.fetchall()
+        cursor.close()
+        if anomaly_class is None:
+            return None
+        return anomaly_class
+
+
+    @staticmethod
+    def get_live_anomaly_detection(db_connection, device, algo, feature):
+        """
+        Gets the anomaly class from the live table.
+        :input: db_connection: database connection, device: device that made the request, ml_type: 
+        ml_type that is being used
+        :return: the anomaly class of the model
+        """
+        cursor = db_connection.cursor()
+        cursor.execute("""
+            SELECT time_stamp, anomaly_class FROM live_anomaly
             WHERE device = ? AND algo = ? AND feature = ?
-            ORDER BY id DESC
+            ORDER BY time_stamp
         """, (device, algo, feature))
         anomaly_class = cursor.fetchall()
         cursor.close()
