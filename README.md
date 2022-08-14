@@ -14,6 +14,7 @@ The entire Flask application is in the `app` Folder. It is structured in a Model
 2. The Controllers forward the data from the requests to the **Model**. The Model handles the application's logic, including data processing, ML/DL, and database-related work. The following folders contain the main parts of the **Model**:
   * `àpp/services` contains so-called service classes. They perform the main code logic: data pre-processing, ML/DL anomaly, and classification training/evaluation.
   * `àpp/database/dbqueries`: Are all database queries (SQLite) for the Flask Application 
+  * `app/schema.sql`: Defines the database tables
 
 3. The **View** is the Graphical User Interface. It encompasses the `app/templates` and the `app/static` folders.
 
@@ -42,7 +43,12 @@ export FLASK_ENV=development
 flask init-db
 flask run --host=serverip
 ```
-If you do not know the IP of your machine, use the `ifconfig` command. It is extremely important to have the Application running on your IP address, as networking with the sensor would otherwise become fairly difficult. This assumes of course, that you are testing this on your LAN Network. Furthermore, after executing these commands a new folder will appear called instance. It houses the database, that can be viewed with the SQLite viewer.
+If you do not know the IP of your machine, use the `ifconfig` command. It is extremely important to have the Application running on your IP address, as networking with the sensor would otherwise become fairly difficult. This assumes of course, that you are testing this on your LAN Network. Furthermore, after executing these commands a new folder will appear called instance. It houses the database file, that can be viewed with the SQLite viewer.
+
+### Accessing the Front-End:
+You can access the frontend by opening a Browser on `http://ipFlask:Port/live`. It is protected by Basic Authentication. Use the default username = admin and pw = admin to access it. It displays only the live monitoring sessi![Screenshot from 2022-08-14 16-43-29](https://user-images.githubusercontent.com/24684973/184542920-8d0a018b-9afe-4b91-8c1f-9729975ee8e1.png)
+ons:
+
 
 
 
