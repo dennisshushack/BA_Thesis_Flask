@@ -20,7 +20,7 @@ The entire Flask application is in the `app` Folder. It is structured in a Model
 ## Installing the Flask Application
 
 ### Prerequsites:
-A computer running Linux or a BSD-based distribution (i.e. Ubuntu, Arch, MAC OS).
+A computer running Linux or a BSD-based distribution (i.e. Ubuntu, Arch, MAC OS) connected to LAN.
 A modern Python version must be installed on that computer (above 3.5). It is also helpfull to install a SQLlite database viewer, such as DB Browser for SQLite (https://sqlitebrowser.org/)
 
 ### Installation:
@@ -42,4 +42,10 @@ export FLASK_ENV=development
 flask init-db
 flask run --host=serverip
 ```
+If you do not know the IP of your machine, use the `ifconfig` command. It is extremely important to have the Application running on your IP address, as networking with the sensor would otherwise become fairly difficult. This assumes of course, that you are testing this on your LAN Network. Furthermore, after executing these commands a new folder will appear called instance. It houses the database, that can be viewed with the SQLite viewer.
+
+
+
+
+
 
