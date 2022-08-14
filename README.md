@@ -19,4 +19,27 @@ The entire Flask application is in the `app` Folder. It is structured in a Model
 
 ## Installing the Flask Application
 
-# Prerequsites:
+### Prerequsites:
+A computer running Linux or a BSD-based distribution (i.e. Ubuntu, Arch, MAC OS).
+A modern Python version must be installed on that computer (above 3.5). It is also helpfull to install a SQLlite database viewer, such as DB Browser for SQLite (https://sqlitebrowser.org/)
+
+### Installation:
+Please follow these commands to install the Flask Application (example Ubuntu):
+```
+apt install python3-venv
+apt-get install git
+git clone https://github.com/dennisshushack/BA_Thesis_Flask.git
+cd BA_Thesis_Flask
+python3 -m venv env
+source env/bin/activate
+pip install flask numpy pandas pyod tensorflow
+```
+To run the application use:
+```
+source env/bin/activate
+export FLASK_APP=app
+export FLASK_ENV=development
+flask init-db
+flask run --host=serverip
+```
+
