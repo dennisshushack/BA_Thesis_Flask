@@ -1,6 +1,6 @@
 # Repository Flask (Data Analysis Application)
 
-This is the repository for the Data Analysis Application and is part of a thesis. The Monitor Controller repo can be found here: https://github.com/dennisshushack/BA_Thesis_PI.
+This is the repository for the Data Analysis Application and is part of a thesis. The Monitor Controller repo can be found here: https://github.com/dennisshushack/BA_Thesis_PI. It is suggested to install the Monitor Controller, before following this installation instruction.
 
 If you have any questions related to the installation or execution of either the Flask Application or the Monitor Controller, you can write me an email:
 dennis.shushack@uzh.ch
